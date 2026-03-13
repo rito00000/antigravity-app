@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>キャラチャット</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="favicon.ico">
+
+    <!-- JSZip for exporting logs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="dark-mode">
+    <!-- ===== アプリ全体ラッパー ===== -->
+    <div id="app-container">
+
+        <!-- ===== メイン画面（キャラ一覧＆スレッド一覧） ===== -->
+        <div id="main-view" class="view active">
+            <header class="app-header">
+                <div class="header-left">
+                    <h1 id="header-title">キャラクター一覧</h1>
+                </div>
+                <div class="header-right">
+                    <button id="btn-global-settings" class="icon-btn">⚙️</button>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <!-- キャラクター一覧リスト -->
+                <ul id="character-list" class="item-list">
+                    <!-- JSで動的に追加 -->
+                </ul>
+                <button id="btn-add-character" class="primary-btn floating-btn">+</button>
+            </div>
+        </div>
+
+        <!-- ===== スレッド一覧画面（キャラ選択後） ===== -->
+        <div id="thread-view" class="view">
+            <header class="app-header">
+                <div class="header-left">
+                    <button id="btn-back-to-chars" class="icon-btn">◀</button>
+                    <h1 id="thread-header-title">キャラ名</h1>
+                </div>
+            </header>
+            
+            <div class="thread-actions">
+                <button id="btn-char-prompt-settings" class="secondary-btn">⚙️ システムプロンプト</button>
+                <button id="btn-char-memory-settings" class="secondary-btn">🧠 メモリ (記憶)</button>
+            </div>
+
+            <div class="content-area">
+                <ul id="thread-list" class="item-list">
+                    <!-- JSで動的に追加 -->
+                </ul>
+                <div class="thread-actions">
+                    <button id="btn-new-thread" class="primary-btn">＋ 新しい会話</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== チャット画面 ===== -->
+        <div id="chat-view" class="view">
+            <header class="app-header">
+                <div class="header-left">
+                    <button id="btn-back-to-threads" class="icon-btn">◀</button>
+                    <h1 id="chat-header-title">スレッド名</h1>
+                </div>
+                <div class="header-right">
+                    <button id="btn-export-chat" class="icon-btn">📥</button>
+                </div>
+            </header>
+
+            <!-- メッセージ表示エリア -->
+            <div id="chat-history" class="content-area chat-area">
+                <!-- JSで動的にメッセージ追加 -->
+            </div>
+
+            <!-- 入力エリア -->
+            <div class="chat-input-area">
+                <textarea id="chat-input" placeholder="メッセージを入力..."></textarea>
+                <button id="btn-send" class="icon-btn send-btn">➤</button>
+            </div>
+        </div>
+
+        <!-- ===== キャラ設定画面（プロンプト等） ===== -->
+        <div id="char-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>キャラクター設定</h2>
+                <button id="btn-close-char-settings" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <label for="char-name-input">キャラクター名</label>
+                <input type="text" id="char-name-input" placeholder="名前を入力">
+
+                <label for="char-appearance-input">外見設定</label>
+                <textarea id="char-appearance-input" rows="4" placeholder="キャラクターの外見（髪型、瞳の色、体格、服装など）を入力..."></textarea>
+
+                <div id="appearance-prompt-area" style="display:none;">
+                    <label>画像生成用プロンプト (英語)</label>
+                    <div class="prompt-output-box">
+                        <div id="appearance-prompt-output" class="prompt-output-text"></div>
+                        <button id="btn-copy-appearance-prompt" class="icon-btn copy-btn" title="コピー">📋</button>
+                    </div>
+                </div>
+                <button id="btn-generate-appearance-prompt" class="secondary-btn full-width margin-top">✨ 英語プロンプトを生成</button>
+
+                <label for="char-prompt-input">システムプロンプト (最大20,000文字)</label>
+                <textarea id="char-prompt-input" rows="8" placeholder="キャラクターの性格や設定を入力..."></textarea>
+
+                <button id="btn-save-char" class="primary-btn full-width">保存</button>
+                <button id="btn-delete-char" class="danger-btn full-width margin-top">このキャラを削除</button>
+            </div>
+        </div>
+
+        <!-- ===== キャラメモリ画面 ===== -->
+        <div id="char-memory-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>メモリ (記憶)</h2>
+                <button id="btn-close-char-memory" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <p class="help-text">会話の中で自動的に抽出された、キャラクターの記憶の一覧です。チャット時にこの内容がシステムプロンプトに追記されます。</p>
+                
+                <ul id="memory-list" class="item-list" style="margin-top: 10px; max-height: 60vh; overflow-y: auto;">
+                    <!-- JSで動的に追加 -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- ===== 全体設定画面（APIキー等） ===== -->
+        <div id="global-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>アプリ設定</h2>
+                <button id="btn-close-global-settings" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <label for="api-key-input">Gemini APIキー</label>
+                <input type="password" id="api-key-input" placeholder="AIzaSy...">
+                <p class="help-text">キーはブラウザ内にのみ保存されます。</p>
+
+                <label>使用モデル（※無料枠あり）</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="model" value="gemini-3.1-flash-lite-preview" checked>
+                        Gemini 3.1 Flash Lite Preview (デフォルト)
+                    </label>
+                    <label>
+                        <input type="radio" name="model" value="gemini-3-flash-preview">
+                        Gemini 3 Flash Preview
+                    </label>
+                    <label>
+                        <input type="radio" name="model" value="gemini-2.5-pro">
+                        Gemini 2.5 Pro
+                    </label>
+                    <label>
+                        <input type="radio" name="model" value="gemini-2.5-flash">
+                        Gemini 2.5 Flash
+                    </label>
+                    <label>
+                        <input type="radio" name="model" value="gemini-2.5-flash-lite">
+                        Gemini 2.5 Flash Lite
+                    </label>
+                </div>
+
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
+                <p class="help-text">すべてのキャラクターのチャット履歴をZIP形式で出力します。</p>
+                <button id="btn-export-all" class="secondary-btn full-width margin-top">全ログZIP一括出力</button>
+
+                <button id="btn-save-global" class="primary-btn full-width margin-top">保存して戻る</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>
