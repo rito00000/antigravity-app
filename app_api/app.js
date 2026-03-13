@@ -546,12 +546,7 @@ function setupEventListeners() {
 
     // --- Chat ---
     document.getElementById('btn-send').onclick = handleSendMessage;
-    document.getElementById('chat-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
+    // Enterキーは改行のみ（送信は送信ボタンのみ）
 
     // --- Global Settings ---
     document.getElementById('api-key-input').value = AppState.apiKey;
