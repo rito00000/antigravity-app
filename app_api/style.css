@@ -517,3 +517,67 @@ input[type="password"] {
         padding-bottom: max(16px, calc(8px + env(safe-area-inset-bottom)));
     }
 }
+
+/* ===== 端末情報設定画面 ===== */
+.context-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background-color: var(--surface-color);
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    margin-top: 8px;
+}
+
+.context-checkbox-label {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    margin: 0 !important;
+    padding: 8px 0;
+    color: var(--text-primary) !important;
+    font-size: 0.9rem !important;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.context-checkbox-label:last-child {
+    border-bottom: none;
+}
+
+.context-checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    accent-color: var(--accent-color);
+    cursor: pointer;
+}
+
+#ctx-instruction-input {
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 100px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.context-test-area {
+    margin-top: 12px;
+}
+
+.context-test-output {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 40vh;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+}

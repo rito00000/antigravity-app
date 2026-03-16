@@ -112,7 +112,9 @@
                 <label for="char-prompt-input">システムプロンプト (最大20,000文字)</label>
                 <textarea id="char-prompt-input" rows="8" placeholder="キャラクターの性格や設定を入力..."></textarea>
 
-                <button id="btn-save-char" class="primary-btn full-width">保存</button>
+                <button id="btn-open-context-settings" class="secondary-btn full-width margin-top">📱 送信する端末情報設定</button>
+
+                <button id="btn-save-char" class="primary-btn full-width margin-top">保存</button>
                 <button id="btn-delete-char" class="danger-btn full-width margin-top">このキャラを削除</button>
             </div>
         </div>
@@ -129,6 +131,52 @@
                 <ul id="memory-list" class="item-list" style="margin-top: 10px; max-height: 60vh; overflow-y: auto;">
                     <!-- JSで動的に追加 -->
                 </ul>
+            </div>
+        </div>
+
+        <!-- ===== 端末情報送信設定画面 ===== -->
+        <div id="context-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>送信する端末情報設定</h2>
+                <button id="btn-close-context-settings" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <p class="help-text">ONにした項目の情報が、会話時にAIへ自動送信されます。取得できない項目は自動的にスキップされます。</p>
+
+                <div class="context-checkbox-group">
+                    <label class="context-checkbox-label">
+                        <input type="checkbox" id="ctx-datetime" checked>
+                        <span>🕐 現在日時</span>
+                    </label>
+                    <label class="context-checkbox-label">
+                        <input type="checkbox" id="ctx-device" checked>
+                        <span>📱 デバイス環境（Mobile / Desktop）</span>
+                    </label>
+                    <label class="context-checkbox-label">
+                        <input type="checkbox" id="ctx-os" checked>
+                        <span>💻 OS種別（Android / Windows 等）</span>
+                    </label>
+                    <label class="context-checkbox-label">
+                        <input type="checkbox" id="ctx-network" checked>
+                        <span>📡 ネットワーク状況（室内 / 屋外）</span>
+                    </label>
+                    <label class="context-checkbox-label">
+                        <input type="checkbox" id="ctx-battery" checked>
+                        <span>🔋 バッテリー状況</span>
+                    </label>
+                </div>
+
+                <label for="ctx-instruction-input">端末情報の扱いについてのキャラへの指示</label>
+                <textarea id="ctx-instruction-input" rows="5" placeholder="端末情報をどう扱うかの指示を入力..."></textarea>
+                <p class="help-text">AIが端末情報をどう解釈するかを制御します。キャラクターごとにカスタマイズ可能です。</p>
+
+                <button id="btn-test-context" class="secondary-btn full-width margin-top">🧪 テスト（現在取得できる情報を確認）</button>
+                <div id="context-test-result" class="context-test-area" style="display:none;">
+                    <label>AIに送信されるテキスト（プレビュー）</label>
+                    <pre id="context-test-output" class="context-test-output"></pre>
+                </div>
+
+                <button id="btn-save-context-settings" class="primary-btn full-width margin-top">保存して戻る</button>
             </div>
         </div>
 

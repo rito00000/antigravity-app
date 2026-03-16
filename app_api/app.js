@@ -86,6 +86,175 @@ function escapeHtml(str) {
 }
 
 // ============================================================
+// 3.5. DEVICE CONTEXT UTILITIES
+// ============================================================
+
+/**
+ * 端末情報の取り扱い指示のデフォルト文言
+ */
+const DEFAULT_CONTEXT_INSTRUCTION = `以下の【ユーザー端末情報】は、ユーザーの現在の環境・状況を示す裏側のメタデータです。
+あなたはこの情報を会話の背景として常に把握してください。
+ただし、毎回の返答で必ず言及する必要はありません。
+「深夜だから体調を気遣う」「充電が少ないから手短に返す」など、キャラクターとして自然に触れるべきタイミングでのみ、会話にさりげなく織り交ぜてください。
+特に触れる必要がない場合は、この情報について一切言及しないでください。`;
+
+/**
+ * 新規キャラクター用のデフォルトコンテキスト設定を返す
+ */
+function getDefaultContextSettings() {
+    return {
+        sendDatetime: true,
+        sendDevice: true,
+        sendOs: true,
+        sendNetwork: true,
+        sendBattery: true,
+        contextInstruction: DEFAULT_CONTEXT_INSTRUCTION
+    };
+}
+
+/**
+ * 現在日時の文字列を返す
+ */
+function getDatetimeString() {
+    try {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+        const dow = weekdays[now.getDay()];
+
+        let period = '';
+        const hour = now.getHours();
+        if (hour >= 5 && hour < 10) period = '朝';
+        else if (hour >= 10 && hour < 12) period = '午前';
+        else if (hour >= 12 && hour < 14) period = '昼';
+        else if (hour >= 14 && hour < 17) period = '午後';
+        else if (hour >= 17 && hour < 20) period = '夕方';
+        else if (hour >= 20 && hour < 24) period = '夜';
+        else period = '深夜';
+
+        return `${yyyy}/${month}/${day}(${dow}) ${hh}:${mm} (${period})`;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * デバイス種別(Mobile/Desktop)を返す
+ */
+function getDeviceType() {
+    try {
+        const ua = navigator.userAgent || '';
+        const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        return isMobile ? 'Mobile（モバイル端末）' : 'Desktop（PC）';
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * OS種別を返す
+ */
+function getOsType() {
+    try {
+        const ua = navigator.userAgent || '';
+        if (/Android/i.test(ua)) return 'Android';
+        if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+        if (/Windows/i.test(ua)) return 'Windows';
+        if (/Mac OS/i.test(ua)) return 'macOS';
+        if (/Linux/i.test(ua)) return 'Linux';
+        if (/CrOS/i.test(ua)) return 'ChromeOS';
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * ネットワーク状況を取得して室内/屋外を判定する
+ */
+function getNetworkInfo() {
+    try {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (!conn || !conn.type) return null;
+        const type = conn.type;
+        if (type === 'wifi' || type === 'ethernet') {
+            return 'Wi-Fi接続（おそらく室内）';
+        } else if (type === 'cellular') {
+            const eff = conn.effectiveType || '';
+            return `モバイル回線(${eff.toUpperCase()})接続（おそらく屋外）`;
+        } else if (type === 'none') {
+            return 'オフライン';
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * バッテリー状況を取得する（非同期）
+ */
+async function getBatteryInfo() {
+    try {
+        if (!navigator.getBattery) return null;
+        const battery = await navigator.getBattery();
+        const level = Math.round(battery.level * 100);
+        const charging = battery.charging ? '充電中' : '放電中（バッテリー駆動）';
+        return `${level}% (${charging})`;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * 設定に基づいてコンテキスト文字列を組み立てる（非同期）
+ * @param {object} contextSettings - キャラクターのコンテキスト設定
+ * @returns {Promise<string|null>} - AIに付与する文字列（全てOFFまたは取得不可なら null）
+ */
+async function buildContextString(contextSettings) {
+    if (!contextSettings) return null;
+
+    const lines = [];
+
+    if (contextSettings.sendDatetime) {
+        const dt = getDatetimeString();
+        if (dt) lines.push(`現在日時: ${dt}`);
+    }
+    if (contextSettings.sendDevice) {
+        const dev = getDeviceType();
+        if (dev) lines.push(`デバイス: ${dev}`);
+    }
+    if (contextSettings.sendOs) {
+        const os = getOsType();
+        if (os) lines.push(`OS: ${os}`);
+    }
+    if (contextSettings.sendNetwork) {
+        const net = getNetworkInfo();
+        if (net) lines.push(`ネットワーク: ${net}`);
+    }
+    if (contextSettings.sendBattery) {
+        const bat = await getBatteryInfo();
+        if (bat) lines.push(`バッテリー: ${bat}`);
+    }
+
+    if (lines.length === 0) return null;
+
+    const instruction = (contextSettings.contextInstruction || '').trim();
+    let result = '';
+    if (instruction) {
+        result += instruction + '\n\n';
+    }
+    result += '【ユーザー端末情報】\n';
+    result += lines.join('\n');
+
+    return result;
+}
+
+// ============================================================
 // 4. VIEW NAVIGATION
 // ============================================================
 const views = {
@@ -94,6 +263,7 @@ const views = {
     chat: document.getElementById('chat-view'),
     charSettings: document.getElementById('char-settings-view'),
     charMemory: document.getElementById('char-memory-view'),
+    contextSettings: document.getElementById('context-settings-view'),
     globalSettings: document.getElementById('global-settings-view')
 };
 
@@ -360,6 +530,8 @@ function setupEventListeners() {
         // 外見プロンプトエリアも初期化
         document.getElementById('appearance-prompt-area').style.display = 'none';
         document.getElementById('appearance-prompt-output').textContent = '';
+        // 新規キャラ用：一時的なコンテキスト設定を初期化（保存時に使う）
+        window._tempContextSettings = getDefaultContextSettings();
         showView('charSettings');
     };
 
@@ -381,6 +553,10 @@ function setupEventListeners() {
                 document.getElementById('appearance-prompt-area').style.display = 'none';
                 document.getElementById('appearance-prompt-output').textContent = '';
             }
+            // 既存キャラ用：一時的なコンテキスト設定を復元
+            window._tempContextSettings = char.contextSettings
+                ? JSON.parse(JSON.stringify(char.contextSettings))
+                : getDefaultContextSettings();
             showView('charSettings');
         };
     }
@@ -404,6 +580,69 @@ function setupEventListeners() {
     if (btnCloseMemory) {
         btnCloseMemory.onclick = () => showView('thread');
     }
+
+    // --- Context Settings (端末情報設定画面) ---
+    document.getElementById('btn-open-context-settings').onclick = () => {
+        const settings = window._tempContextSettings || getDefaultContextSettings();
+        document.getElementById('ctx-datetime').checked = settings.sendDatetime;
+        document.getElementById('ctx-device').checked = settings.sendDevice;
+        document.getElementById('ctx-os').checked = settings.sendOs;
+        document.getElementById('ctx-network').checked = settings.sendNetwork;
+        document.getElementById('ctx-battery').checked = settings.sendBattery;
+        document.getElementById('ctx-instruction-input').value = settings.contextInstruction || DEFAULT_CONTEXT_INSTRUCTION;
+        // テスト結果エリアを初期化
+        document.getElementById('context-test-result').style.display = 'none';
+        document.getElementById('context-test-output').textContent = '';
+        showView('contextSettings');
+    };
+
+    document.getElementById('btn-close-context-settings').onclick = () => {
+        showView('charSettings');
+    };
+
+    document.getElementById('btn-test-context').onclick = async () => {
+        const testSettings = {
+            sendDatetime: document.getElementById('ctx-datetime').checked,
+            sendDevice: document.getElementById('ctx-device').checked,
+            sendOs: document.getElementById('ctx-os').checked,
+            sendNetwork: document.getElementById('ctx-network').checked,
+            sendBattery: document.getElementById('ctx-battery').checked,
+            contextInstruction: document.getElementById('ctx-instruction-input').value.trim()
+        };
+        const btn = document.getElementById('btn-test-context');
+        btn.disabled = true;
+        btn.textContent = '⏳ 取得中...';
+        try {
+            const resultText = await buildContextString(testSettings);
+            const outputArea = document.getElementById('context-test-result');
+            const outputText = document.getElementById('context-test-output');
+            outputArea.style.display = 'block';
+            if (resultText) {
+                outputText.textContent = resultText;
+            } else {
+                outputText.textContent = '（送信する情報はありません。全ての項目がOFFか、取得に失敗しました。）';
+            }
+        } catch (e) {
+            console.error('コンテキストテスト失敗:', e);
+            document.getElementById('context-test-output').textContent = 'テスト中にエラーが発生しました: ' + e.message;
+            document.getElementById('context-test-result').style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🧪 テスト（現在取得できる情報を確認）';
+        }
+    };
+
+    document.getElementById('btn-save-context-settings').onclick = () => {
+        window._tempContextSettings = {
+            sendDatetime: document.getElementById('ctx-datetime').checked,
+            sendDevice: document.getElementById('ctx-device').checked,
+            sendOs: document.getElementById('ctx-os').checked,
+            sendNetwork: document.getElementById('ctx-network').checked,
+            sendBattery: document.getElementById('ctx-battery').checked,
+            contextInstruction: document.getElementById('ctx-instruction-input').value.trim()
+        };
+        showView('charSettings');
+    };
 
     // --- Character Save ---
     document.getElementById('btn-save-char').onclick = () => {
@@ -432,13 +671,15 @@ function setupEventListeners() {
                 char.appearance = appearance;
                 char.prompt = prompt;
                 char.appearancePrompt = appearancePrompt;
+                char.contextSettings = window._tempContextSettings || char.contextSettings || getDefaultContextSettings();
                 document.getElementById('thread-header-title').textContent = name;
             }
             saveData();
             renderCharacters();
             showView('thread');
         } else {
-            const newChar = { id: generateId(), name, appearance, prompt, appearancePrompt };
+            const ctxSettings = window._tempContextSettings || getDefaultContextSettings();
+            const newChar = { id: generateId(), name, appearance, prompt, appearancePrompt, contextSettings: ctxSettings };
             AppState.characters.push(newChar);
             saveData();
             renderCharacters();
@@ -594,6 +835,21 @@ function buildSystemPrompt(char) {
     return systemPromptText;
 }
 
+/**
+ * コンテキスト情報付きのシステムプロンプトを構築する（非同期版）
+ */
+async function buildSystemPromptWithContext(char) {
+    let systemPromptText = buildSystemPrompt(char);
+    const contextSettings = char.contextSettings || null;
+    if (contextSettings) {
+        const contextStr = await buildContextString(contextSettings);
+        if (contextStr) {
+            systemPromptText += '\n\n' + contextStr;
+        }
+    }
+    return systemPromptText;
+}
+
 async function handleSendMessage() {
     if (isSending) return;
 
@@ -652,7 +908,7 @@ async function handleSendMessage() {
             parts: [{ text: msg.text }]
         }));
 
-        const systemPromptText = buildSystemPrompt(char);
+        const systemPromptText = await buildSystemPromptWithContext(char);
 
         const reqBody = {
             systemInstruction: {
