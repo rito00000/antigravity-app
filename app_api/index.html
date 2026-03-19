@@ -51,6 +51,7 @@
             <div class="thread-actions">
                 <button id="btn-char-prompt-settings" class="secondary-btn">⚙️ システムプロンプト</button>
                 <button id="btn-char-memory-settings" class="secondary-btn">🧠 メモリ (記憶)</button>
+                <button id="btn-open-room" class="secondary-btn room-btn">🏠 Roomへ</button>
             </div>
 
             <div class="content-area">
@@ -187,12 +188,12 @@
                 <button id="btn-close-global-settings" class="icon-btn">✖</button>
             </header>
             <div class="content-area padding-area">
-                <div class="version-badge">20260314 rev.1</div>
+                <div class="version-badge">20260319 rev.2</div>
                 <label for="api-key-input">Gemini APIキー</label>
                 <input type="password" id="api-key-input" placeholder="AIzaSy...">
                 <p class="help-text">キーはブラウザ内にのみ保存されます。</p>
 
-                <label>使用モデル（※無料枠あり）</label>
+                <label>会話用モデル（※無料枠あり）</label>
                 <div class="radio-group">
                     <label>
                         <input type="radio" name="model" value="gemini-3.1-flash-lite-preview" checked>
@@ -216,11 +217,161 @@
                     </label>
                 </div>
 
+                <label>room用モデル</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="roomModel" value="gemini-3.1-flash-lite-preview" checked>
+                        Gemini 3.1 Flash Lite Preview (デフォルト)
+                    </label>
+                    <label>
+                        <input type="radio" name="roomModel" value="gemini-3-flash-preview">
+                        Gemini 3 Flash Preview
+                    </label>
+                    <label>
+                        <input type="radio" name="roomModel" value="gemini-2.5-pro">
+                        Gemini 2.5 Pro
+                    </label>
+                    <label>
+                        <input type="radio" name="roomModel" value="gemini-2.5-flash">
+                        Gemini 2.5 Flash
+                    </label>
+                    <label>
+                        <input type="radio" name="roomModel" value="gemini-2.5-flash-lite">
+                        Gemini 2.5 Flash Lite
+                    </label>
+                </div>
+
                 <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
                 <p class="help-text">すべてのキャラクターのチャット履歴をZIP形式で出力します。</p>
                 <button id="btn-export-all" class="secondary-btn full-width margin-top">全ログZIP一括出力</button>
 
                 <button id="btn-save-global" class="primary-btn full-width margin-top">保存して戻る</button>
+            </div>
+        </div>
+
+        <!-- ===== Room画面 ===== -->
+        <div id="room-view" class="view">
+            <div id="room-bg-layer" class="room-layer room-bg-default"></div>
+            <div id="room-weather-window" class="room-weather-window"></div>
+            <div id="room-char-layer" class="room-layer"></div>
+
+            <div class="room-header-status">
+                <button id="btn-back-from-room" class="icon-btn" style="color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8);">◀</button>
+                <div class="room-mood-display">
+                    <span id="room-mood-icon">😊</span>
+                    <span id="room-mood-text">普通</span>
+                </div>
+                <div style="width:44px;"></div>
+            </div>
+
+            <div class="room-ui-container">
+                <div class="room-message-box">
+                    <div id="room-char-message" class="room-text">...</div>
+                </div>
+                <div class="room-reply-area">
+                    <input type="text" id="room-reply-input" placeholder="返信を入力...">
+                    <button id="btn-room-send" class="send-btn">➤</button>
+                </div>
+                <div class="room-nav">
+                    <button id="btn-room-diary" class="room-nav-btn">📖 日記</button>
+                    <button id="btn-room-schedule" class="room-nav-btn">📅 予定</button>
+                    <button id="btn-room-items" class="room-nav-btn">🎁 グッズ</button>
+                    <button id="btn-room-logs" class="room-nav-btn">💬 ログ</button>
+                    <button id="btn-room-settings" class="room-nav-btn">⚙️ 設定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Room - 日記画面 ===== -->
+        <div id="room-diary-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>📖 日記</h2>
+                <button id="btn-close-room-diary" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <div id="room-long-term-memory-area"></div>
+                <div id="room-diary-list"></div>
+            </div>
+        </div>
+
+        <!-- ===== Room - スケジュール画面 ===== -->
+        <div id="room-schedule-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>📅 本日のスケジュール</h2>
+                <button id="btn-close-room-schedule" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <div id="room-schedule-content"></div>
+            </div>
+        </div>
+
+        <!-- ===== Room - グッズ画面 ===== -->
+        <div id="room-items-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>🎁 グッズ</h2>
+                <button id="btn-close-room-items" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <div id="room-items-list"></div>
+                <div class="room-gift-area">
+                    <input type="text" id="room-gift-input" placeholder="グッズ名を入力...">
+                    <button id="btn-room-gift" class="primary-btn">🎁 あげる</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Room - 会話ログ画面 ===== -->
+        <div id="room-logs-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>💬 会話ログ</h2>
+                <button id="btn-close-room-logs" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <div id="room-logs-list"></div>
+            </div>
+        </div>
+
+        <!-- ===== Room - 設定画面 ===== -->
+        <div id="room-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>⚙️ Room設定</h2>
+                <button id="btn-close-room-settings-modal" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <h3 style="font-size:0.95rem; margin-bottom:8px;">背景画像</h3>
+                <p class="help-text">推奨サイズ: 1080 x 1920 (縦長)</p>
+                <label for="room-img-bg-morning">朝</label>
+                <input type="text" id="room-img-bg-morning" placeholder="画像URLを入力...">
+                <label for="room-img-bg-evening">夕方</label>
+                <input type="text" id="room-img-bg-evening" placeholder="画像URLを入力...">
+                <label for="room-img-bg-night">夜</label>
+                <input type="text" id="room-img-bg-night" placeholder="画像URLを入力...">
+
+                <h3 style="font-size:0.95rem; margin-top:20px; margin-bottom:8px;">天気画像（窓）</h3>
+                <p class="help-text">推奨サイズ: 400 x 400 前後</p>
+                <label for="room-img-weather-sunny">晴</label>
+                <input type="text" id="room-img-weather-sunny" placeholder="画像URLを入力...">
+                <label for="room-img-weather-cloudy">曇り</label>
+                <input type="text" id="room-img-weather-cloudy" placeholder="画像URLを入力...">
+                <label for="room-img-weather-rainy">雨</label>
+                <input type="text" id="room-img-weather-rainy" placeholder="画像URLを入力...">
+                <label for="room-img-weather-snowy">雪</label>
+                <input type="text" id="room-img-weather-snowy" placeholder="画像URLを入力...">
+
+                <h3 style="font-size:0.95rem; margin-top:20px; margin-bottom:8px;">キャラクター画像（透過PNG推奨）</h3>
+                <p class="help-text">推奨サイズ: 1024 x 1024 前後</p>
+                <label for="room-img-char-normal">普通</label>
+                <input type="text" id="room-img-char-normal" placeholder="画像URLを入力...">
+                <label for="room-img-char-happy">ハッピー</label>
+                <input type="text" id="room-img-char-happy" placeholder="画像URLを入力...">
+                <label for="room-img-char-angry">イライラ</label>
+                <input type="text" id="room-img-char-angry" placeholder="画像URLを入力...">
+                <label for="room-img-char-sad">悲しみ</label>
+                <input type="text" id="room-img-char-sad" placeholder="画像URLを入力...">
+                <label for="room-img-char-sleepy">眠い</label>
+                <input type="text" id="room-img-char-sleepy" placeholder="画像URLを入力...">
+
+                <button id="btn-save-room-settings" class="primary-btn full-width margin-top">保存して戻る</button>
             </div>
         </div>
 

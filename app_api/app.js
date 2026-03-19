@@ -9,7 +9,8 @@
 const AppState = {
     apiKey: '',
     model: 'gemini-3.1-flash-lite-preview',
-    characters: [], // { id, name, prompt, appearance }
+    roomModel: 'gemini-3.1-flash-lite-preview',
+    characters: [], // { id, name, prompt, appearance, roomSettings, roomState, roomLogs, diary, roomLongTermMemory }
     threads: [],    // { id, charId, title, createdAt, messages: [] }
     memories: [],   // { id, charId, createdAt, content }
     activeCharId: null,
@@ -26,6 +27,7 @@ function loadData() {
         const parsed = JSON.parse(raw);
         AppState.apiKey = parsed.apiKey || '';
         AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
+        AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
         AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
         AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
         AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
@@ -39,6 +41,7 @@ function saveData() {
         const dataToSave = {
             apiKey: AppState.apiKey,
             model: AppState.model,
+            roomModel: AppState.roomModel,
             characters: AppState.characters,
             threads: AppState.threads,
             memories: AppState.memories
@@ -264,7 +267,13 @@ const views = {
     charSettings: document.getElementById('char-settings-view'),
     charMemory: document.getElementById('char-memory-view'),
     contextSettings: document.getElementById('context-settings-view'),
-    globalSettings: document.getElementById('global-settings-view')
+    globalSettings: document.getElementById('global-settings-view'),
+    room: document.getElementById('room-view'),
+    roomDiary: document.getElementById('room-diary-view'),
+    roomSchedule: document.getElementById('room-schedule-view'),
+    roomItems: document.getElementById('room-items-view'),
+    roomLogs: document.getElementById('room-logs-view'),
+    roomSettings: document.getElementById('room-settings-view')
 };
 
 function showView(viewName) {
@@ -795,6 +804,10 @@ function setupEventListeners() {
     for (let i = 0; i < radios.length; i++) {
         radios[i].checked = (radios[i].value === AppState.model);
     }
+    const roomModelRadios = document.getElementsByName('roomModel');
+    for (let i = 0; i < roomModelRadios.length; i++) {
+        roomModelRadios[i].checked = (roomModelRadios[i].value === AppState.roomModel);
+    }
 
     document.getElementById('btn-save-global').onclick = () => {
         AppState.apiKey = document.getElementById('api-key-input').value.trim();
@@ -805,6 +818,13 @@ function setupEventListeners() {
                 break;
             }
         }
+        const roomRadios = document.getElementsByName('roomModel');
+        for (let i = 0; i < roomRadios.length; i++) {
+            if (roomRadios[i].checked) {
+                AppState.roomModel = roomRadios[i].value;
+                break;
+            }
+        }
         saveData();
         showView('main');
     };
@@ -812,6 +832,38 @@ function setupEventListeners() {
     // --- Export ---
     document.getElementById('btn-export-chat').onclick = exportCurrentThread;
     document.getElementById('btn-export-all').onclick = exportAllThreadsZip;
+
+    // --- Room ---
+    document.getElementById('btn-open-room').onclick = () => {
+        if (!AppState.activeCharId) return;
+        enterRoom(AppState.activeCharId);
+    };
+    document.getElementById('btn-back-from-room').onclick = () => {
+        showView('thread');
+    };
+    document.getElementById('btn-room-send').onclick = handleRoomReply;
+    document.getElementById('room-reply-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleRoomReply();
+        }
+    });
+    // Room Nav buttons
+    document.getElementById('btn-room-diary').onclick = () => { renderRoomDiary(); showView('roomDiary'); };
+    document.getElementById('btn-room-schedule').onclick = () => { renderRoomSchedule(); showView('roomSchedule'); };
+    document.getElementById('btn-room-items').onclick = () => { renderRoomItems(); showView('roomItems'); };
+    document.getElementById('btn-room-logs').onclick = () => { renderRoomLogs(); showView('roomLogs'); };
+    document.getElementById('btn-room-settings').onclick = () => { loadRoomSettingsForm(); showView('roomSettings'); };
+    // Room Modal close buttons
+    document.getElementById('btn-close-room-diary').onclick = () => showView('room');
+    document.getElementById('btn-close-room-schedule').onclick = () => showView('room');
+    document.getElementById('btn-close-room-items').onclick = () => showView('room');
+    document.getElementById('btn-close-room-logs').onclick = () => showView('room');
+    document.getElementById('btn-close-room-settings-modal').onclick = () => showView('room');
+    // Room Settings save
+    document.getElementById('btn-save-room-settings').onclick = saveRoomSettingsForm;
+    // Room Gift
+    document.getElementById('btn-room-gift').onclick = handleRoomGift;
 }
 
 // ============================================================
@@ -1171,7 +1223,712 @@ async function exportAllThreadsZip() {
 }
 
 // ============================================================
-// 10. INITIALIZATION
+// 10. ROOM FEATURE
+// ============================================================
+
+/** Room用デバッグログ */
+function roomLog(...args) { console.log('[Room]', ...args); }
+
+/** fetchWithTimeout: AbortControllerでタイムアウト付きfetch */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        return response;
+    } catch (e) {
+        if (e.name === 'AbortError') throw new Error('リクエストがタイムアウトしました（30秒）');
+        throw e;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+/** キャラクターのRoom関連データを遅延初期化 */
+function ensureRoomData(char) {
+    if (!char.roomSettings) {
+        char.roomSettings = {
+            bgMorning: '', bgEvening: '', bgNight: '',
+            weatherSunny: '', weatherCloudy: '', weatherRainy: '', weatherSnowy: '',
+            charNormal: '', charHappy: '', charAngry: '', charSad: '', charSleepy: ''
+        };
+    }
+    if (!char.roomState) {
+        char.roomState = {
+            mood: 'normal', moodValue: 50,
+            items: [], schedule: null, scheduleDate: '',
+            lastAccessTime: null, accessHistory: [],
+            weatherCache: null
+        };
+    }
+    if (!Array.isArray(char.roomLogs)) char.roomLogs = [];
+    if (!Array.isArray(char.diary)) char.diary = [];
+    if (!Array.isArray(char.roomLongTermMemory)) char.roomLongTermMemory = [];
+}
+
+/** 機嫌のアイコンとテキストを返す */
+function getMoodDisplay(mood, moodValue) {
+    const moods = {
+        happy:  { icon: '😄', text: 'ハッピー' },
+        angry:  { icon: '😠', text: 'イライラ' },
+        sad:    { icon: '😢', text: '悲しみ' },
+        sleepy: { icon: '😴', text: '眠い' },
+        normal: { icon: '😊', text: '普通' }
+    };
+    const m = moods[mood] || moods.normal;
+    if (moodValue >= 80) m.text += ' ♪';
+    else if (moodValue <= 20) m.text += ' …';
+    return m;
+}
+
+/** 現在の時間帯を返す: morning / evening / night */
+function getTimeOfDay() {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 17) return 'morning';
+    if (h >= 17 && h < 20) return 'evening';
+    return 'night';
+}
+
+/** Room画面のビジュアルを更新（背景・天気・キャラ画像・機嫌） */
+function updateRoomVisuals(char) {
+    ensureRoomData(char);
+    const rs = char.roomSettings;
+    const state = char.roomState;
+    const bgLayer = document.getElementById('room-bg-layer');
+    const weatherWin = document.getElementById('room-weather-window');
+    const charLayer = document.getElementById('room-char-layer');
+
+    // 背景
+    const tod = getTimeOfDay();
+    const bgMap = { morning: rs.bgMorning, evening: rs.bgEvening, night: rs.bgNight };
+    const bgUrl = bgMap[tod];
+    if (bgUrl) {
+        bgLayer.className = 'room-layer';
+        bgLayer.style.backgroundImage = `url('${bgUrl}')`;
+    } else {
+        bgLayer.className = 'room-layer room-bg-default';
+        bgLayer.style.backgroundImage = '';
+    }
+
+    // 天気
+    const weather = state.weatherCache?.weather || 'sunny';
+    const weatherMap = { sunny: rs.weatherSunny, cloudy: rs.weatherCloudy, rainy: rs.weatherRainy, snowy: rs.weatherSnowy };
+    const wUrl = weatherMap[weather];
+    if (wUrl) {
+        weatherWin.style.backgroundImage = `url('${wUrl}')`;
+        weatherWin.style.display = 'block';
+    } else {
+        weatherWin.style.backgroundImage = '';
+        weatherWin.style.display = 'none';
+    }
+
+    // キャラクター
+    const mood = state.mood || 'normal';
+    const charMap = { normal: rs.charNormal, happy: rs.charHappy, angry: rs.charAngry, sad: rs.charSad, sleepy: rs.charSleepy };
+    const cUrl = charMap[mood];
+    if (cUrl) {
+        charLayer.style.backgroundImage = `url('${cUrl}')`;
+    } else {
+        charLayer.style.backgroundImage = '';
+    }
+
+    // 機嫌表示
+    const md = getMoodDisplay(mood, state.moodValue);
+    document.getElementById('room-mood-icon').textContent = md.icon;
+    document.getElementById('room-mood-text').textContent = md.text;
+}
+
+// --- 天気取得 ---
+async function fetchWeather(char) {
+    ensureRoomData(char);
+    const today = new Date().toISOString().slice(0, 10);
+    if (char.roomState.weatherCache && char.roomState.weatherCache.date === today) {
+        roomLog('天気キャッシュ使用:', char.roomState.weatherCache.weather);
+        return char.roomState.weatherCache.weather;
+    }
+    try {
+        const pos = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) return reject(new Error('Geolocation非対応'));
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+        const lat = pos.coords.latitude.toFixed(2);
+        const lon = pos.coords.longitude.toFixed(2);
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+        const resp = await fetchWithTimeout(url, {}, 15000);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const code = data?.current_weather?.weathercode ?? 0;
+        let weather = 'sunny';
+        if ([1, 2, 3, 45, 48].includes(code)) weather = 'cloudy';
+        else if ([51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99].includes(code)) weather = 'rainy';
+        else if ([71, 73, 75, 77, 85, 86].includes(code)) weather = 'snowy';
+        char.roomState.weatherCache = { date: today, weather };
+        saveData();
+        roomLog('天気取得成功:', weather, '(code:', code, ')');
+        return weather;
+    } catch (e) {
+        roomLog('天気取得失敗（デフォルト: sunny）:', e.message);
+        char.roomState.weatherCache = { date: today, weather: 'sunny' };
+        saveData();
+        return 'sunny';
+    }
+}
+
+// --- 朝5時跨ぎ判定 ---
+function hasCrossed5am(lastAccessISO) {
+    if (!lastAccessISO) return true;
+    const last = new Date(lastAccessISO);
+    const now = new Date();
+    const get5am = (d) => {
+        const t = new Date(d);
+        t.setHours(5, 0, 0, 0);
+        if (d.getHours() < 5) t.setDate(t.getDate() - 1);
+        return t;
+    };
+    const last5am = get5am(last);
+    const now5am = get5am(now);
+    return now5am > last5am;
+}
+
+// --- Room用 Gemini API呼び出し ---
+async function callRoomAPI(systemPrompt, userMessage) {
+    if (!AppState.apiKey) throw new Error('APIキーが設定されていません');
+    const reqBody = {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+    };
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${AppState.roomModel}:generateContent?key=${AppState.apiKey}`;
+    roomLog('API呼び出し:', AppState.roomModel);
+    const response = await fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody)
+    });
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `HTTPエラー: ${response.status}`);
+    }
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!text) throw new Error('APIからの返答が空でした');
+    return text;
+}
+
+/** AI応答のJSONをパースする（フォールバック付き） */
+function parseRoomResponse(text) {
+    try {
+        // JSON部分を抽出（```json ... ``` のマークダウンブロック対応）
+        let jsonStr = text;
+        const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (mdMatch) jsonStr = mdMatch[1].trim();
+        // 直接JSONオブジェクトを探す
+        if (!jsonStr.startsWith('{')) {
+            const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+            if (braceMatch) jsonStr = braceMatch[0];
+        }
+        const parsed = JSON.parse(jsonStr);
+        return {
+            message: parsed.message || '',
+            mood: parsed.mood || 'normal',
+            moodValue: typeof parsed.mood_value === 'number' ? Math.max(0, Math.min(100, parsed.mood_value)) : 50,
+            gainedItems: Array.isArray(parsed.gained_items) ? parsed.gained_items : [],
+            lostItems: Array.isArray(parsed.lost_items) ? parsed.lost_items : []
+        };
+    } catch (e) {
+        roomLog('JSONパース失敗、テキストで返却:', e.message);
+        return { message: text, mood: 'normal', moodValue: 50, gainedItems: [], lostItems: [] };
+    }
+}
+
+/** Room用コンテキスト（システムプロンプト）を構築 */
+async function buildRoomContext(char) {
+    ensureRoomData(char);
+    let ctx = char.prompt || 'You are a helpful assistant.';
+
+    // メモリ
+    const charMemories = AppState.memories.filter(m => m.charId === char.id);
+    if (charMemories.length > 0) {
+        ctx += '\n\n【キャラクターの記憶（メモリ）】\n';
+        charMemories.forEach(m => { ctx += `- [${formatDate(m.createdAt)}] ${m.content}\n`; });
+    }
+
+    // 長期記憶
+    if (char.roomLongTermMemory.length > 0) {
+        ctx += '\n\n【長期記憶（過去の要約）】\n';
+        char.roomLongTermMemory.forEach(m => { ctx += `- [${m.period}] ${m.summary}\n`; });
+    }
+
+    ctx += '\n\nあなたは今、自分のRoomにいます。ユーザがあなたのRoomを訪れました。';
+
+    // 現在の状態
+    ctx += '\n\n【現在の状態】\n';
+    ctx += `現在日時: ${getDatetimeString() || new Date().toLocaleString('ja-JP')}\n`;
+    const weather = char.roomState.weatherCache?.weather || 'sunny';
+    const weatherNames = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
+    ctx += `今日の天気: ${weatherNames[weather] || '晴れ'}\n`;
+    ctx += `現在の機嫌: ${char.roomState.mood} (${char.roomState.moodValue}/100)\n`;
+    const itemNames = char.roomState.items.map(i => i.name).join(', ') || 'なし';
+    ctx += `所持グッズ: ${itemNames}\n`;
+
+    // スケジュール
+    if (char.roomState.schedule) {
+        const s = char.roomState.schedule;
+        ctx += '\n【本日のスケジュール】\n';
+        ctx += `起床: ${s.wake_up || '?'}\n午前: ${s.morning || '?'}\n昼: ${s.noon || '?'}\n`;
+        ctx += `夕方: ${s.evening || '?'}\n夜: ${s.night || '?'}\n深夜: ${s.late_night || '?'}\n就寝: ${s.bed_time || '?'}\n`;
+    }
+
+    // room会話ログ（直近30件）
+    const recentLogs = char.roomLogs.slice(-30);
+    if (recentLogs.length > 0) {
+        ctx += '\n【最近のRoomでの会話 (直近30件)】\n';
+        recentLogs.forEach(l => {
+            const role = l.role === 'user' ? 'ユーザ' : char.name;
+            ctx += `[${role} ${formatDate(l.timestamp)}] ${l.text}\n`;
+        });
+    }
+
+    // 日記（直近30件）
+    const recentDiary = char.diary.slice(-30);
+    if (recentDiary.length > 0) {
+        ctx += '\n【最近の日記 (直近30件)】\n';
+        recentDiary.forEach(d => { ctx += `[${d.date}] ${d.content}\n`; });
+    }
+
+    // 通常チャットの直近30件
+    const charThreads = AppState.threads.filter(t => t.charId === char.id);
+    const allMsgs = [];
+    charThreads.forEach(t => {
+        if (Array.isArray(t.messages)) {
+            t.messages.forEach(m => allMsgs.push(m));
+        }
+    });
+    allMsgs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const recent30 = allMsgs.slice(-30);
+    if (recent30.length > 0) {
+        ctx += '\n【通常会話スレッドの直近30件の会話】\n';
+        recent30.forEach(m => {
+            const role = m.role === 'user' ? 'ユーザ' : char.name;
+            ctx += `[${role} ${formatDate(m.timestamp)}] ${m.text.substring(0, 200)}\n`;
+        });
+    }
+
+    // アクセス履歴
+    const recentAccess = char.roomState.accessHistory.slice(-20);
+    if (recentAccess.length > 0) {
+        ctx += '\n【Roomへのアクセス履歴】\n';
+        recentAccess.forEach(a => { ctx += `${formatDate(a.time)}\n`; });
+    }
+
+    // 端末情報
+    const contextSettings = char.contextSettings || null;
+    if (contextSettings) {
+        const ctxStr = await buildContextString(contextSettings);
+        if (ctxStr) ctx += '\n\n' + ctxStr;
+    }
+
+    // 返答ルール
+    ctx += `\n\n【返答ルール】
+あなたはRoomを訪れたユーザに対して、キャラクターとして自然に話しかけてください。枠に入る程度の一言〜二言で返してください。
+必ず以下のJSON形式のみで返答してください。JSON以外のテキストは出力しないでください。
+{"message": "あなたの発言テキスト", "mood": "normal", "mood_value": 50, "gained_items": [], "lost_items": []}
+- message: ユーザへの発言
+- mood: 現在の気分 (normal/happy/angry/sad/sleepy のいずれか)
+- mood_value: 機嫌値 0-100 (0=最悪, 50=普通, 100=最高)
+- gained_items: 新たに手に入れたグッズの名前の配列（なければ空配列） ※現実的な範囲のもの
+- lost_items: 手放したグッズの名前の配列（なければ空配列）`;
+
+    return ctx;
+}
+
+/** 機嫌・グッズを更新 */
+function applyRoomResponse(char, parsed) {
+    char.roomState.mood = parsed.mood;
+    char.roomState.moodValue = parsed.moodValue;
+    // グッズ追加
+    parsed.gainedItems.forEach(name => {
+        if (name && !char.roomState.items.find(i => i.name === name)) {
+            char.roomState.items.push({ name, acquiredAt: new Date().toISOString() });
+            roomLog('グッズ追加:', name);
+        }
+    });
+    // グッズ削除
+    parsed.lostItems.forEach(name => {
+        const idx = char.roomState.items.findIndex(i => i.name === name);
+        if (idx >= 0) {
+            char.roomState.items.splice(idx, 1);
+            roomLog('グッズ削除:', name);
+        }
+    });
+    saveData();
+    updateRoomVisuals(char);
+}
+
+// --- 日記生成 ---
+async function generateDiary(char) {
+    roomLog('日記生成開始');
+    const prompt = (char.prompt || '') + `\n\n【指示】あなたは日記を書きます。前日あったことや印象に残ったことの感想の一言二言程度を、あなたの一人称で書いてください。
+必ず以下のJSON形式のみで返答してください: {"diary": "日記の内容テキスト"}`;
+    const userMsg = `今日の日付: ${new Date().toLocaleDateString('ja-JP')}。昨日のスケジュール: ${JSON.stringify(char.roomState.schedule || {})}。最近のRoom会話: ${char.roomLogs.slice(-10).map(l => l.text).join(' / ')}`;
+    try {
+        const raw = await callRoomAPI(prompt, userMsg);
+        const parsed = parseRoomResponse(raw);
+        let diaryText = '';
+        try {
+            const j = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
+            diaryText = j.diary || parsed.message || raw;
+        } catch { diaryText = parsed.message || raw; }
+        const dateStr = new Date().toLocaleDateString('ja-JP');
+        char.diary.push({ date: dateStr, content: diaryText });
+        saveData();
+        roomLog('日記生成完了:', diaryText.substring(0, 50));
+    } catch (e) {
+        roomLog('日記生成失敗:', e.message);
+    }
+}
+
+// --- スケジュール生成 ---
+async function generateSchedule(char) {
+    roomLog('スケジュール生成開始');
+    const prompt = (char.prompt || '') + `\n\n【指示】あなたは今日一日のスケジュールを決めます。あなたの性格や好みに合った、自然で現実的なスケジュールを決めてください。
+必ず以下のJSON形式のみで返答してください:
+{"wake_up": "7:00", "morning": "活動内容", "noon": "活動内容", "evening": "活動内容", "night": "活動内容", "late_night": "活動内容", "bed_time": "23:00"}`;
+    const userMsg = `今日の日付: ${new Date().toLocaleDateString('ja-JP')}、天気: ${char.roomState.weatherCache?.weather || 'sunny'}`;
+    try {
+        const raw = await callRoomAPI(prompt, userMsg);
+        let schedule;
+        try {
+            schedule = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
+        } catch { schedule = { wake_up: '7:00', morning: '自由時間', noon: '昼食', evening: '散歩', night: 'リラックス', late_night: '就寝準備', bed_time: '23:00' }; }
+        char.roomState.schedule = schedule;
+        char.roomState.scheduleDate = new Date().toISOString().slice(0, 10);
+        saveData();
+        roomLog('スケジュール生成完了:', JSON.stringify(schedule));
+    } catch (e) {
+        roomLog('スケジュール生成失敗:', e.message);
+    }
+}
+
+// --- Room入室処理 ---
+let isRoomBusy = false;
+
+async function enterRoom(charId) {
+    if (isRoomBusy) return;
+    isRoomBusy = true;
+    const char = AppState.characters.find(c => c.id === charId);
+    if (!char) { isRoomBusy = false; return; }
+    ensureRoomData(char);
+
+    // UI初期表示
+    document.getElementById('room-char-message').textContent = '...';
+    document.getElementById('room-char-message').classList.add('room-loading');
+    document.getElementById('room-reply-input').value = '';
+    document.getElementById('room-reply-input').disabled = true;
+    document.getElementById('btn-room-send').disabled = true;
+    showView('room');
+    updateRoomVisuals(char);
+
+    try {
+        // 天気取得
+        await fetchWeather(char);
+
+        // 朝5時跨ぎチェック → 日記＆スケジュール生成
+        if (hasCrossed5am(char.roomState.lastAccessTime)) {
+            roomLog('朝5時を跨ぎました。日記とスケジュールを生成します。');
+            if (char.roomState.lastAccessTime) {
+                await generateDiary(char);
+            }
+            await generateSchedule(char);
+        }
+
+        // アクセス記録
+        char.roomState.accessHistory.push({ time: new Date().toISOString() });
+        if (char.roomState.accessHistory.length > 50) {
+            char.roomState.accessHistory = char.roomState.accessHistory.slice(-50);
+        }
+        char.roomState.lastAccessTime = new Date().toISOString();
+        saveData();
+
+        updateRoomVisuals(char);
+
+        // 挨拶生成
+        const systemPrompt = await buildRoomContext(char);
+        const raw = await callRoomAPI(systemPrompt, 'ユーザがRoomを訪れました。挨拶してください。');
+        const parsed = parseRoomResponse(raw);
+        roomLog('挨拶応答:', parsed);
+
+        // 会話ログに追加
+        char.roomLogs.push({
+            role: 'model', text: parsed.message,
+            mood: parsed.mood, timestamp: new Date().toISOString()
+        });
+        if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
+
+        applyRoomResponse(char, parsed);
+
+        document.getElementById('room-char-message').textContent = parsed.message || '…';
+        document.getElementById('room-char-message').classList.remove('room-loading');
+    } catch (e) {
+        roomLog('Room入室エラー:', e.message);
+        document.getElementById('room-char-message').textContent = '(通信エラーが発生しました)';
+        document.getElementById('room-char-message').classList.remove('room-loading');
+    } finally {
+        document.getElementById('room-reply-input').disabled = false;
+        document.getElementById('btn-room-send').disabled = false;
+        isRoomBusy = false;
+
+        // データ量チェック（非同期で実行）
+        checkDataLimits(char);
+    }
+}
+
+// --- ユーザ返信処理 ---
+async function handleRoomReply() {
+    if (isRoomBusy) return;
+    const input = document.getElementById('room-reply-input');
+    const text = input.value.trim();
+    if (!text) return;
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+
+    isRoomBusy = true;
+    input.value = '';
+    input.disabled = true;
+    document.getElementById('btn-room-send').disabled = true;
+    document.getElementById('room-char-message').textContent = 'thinking...';
+    document.getElementById('room-char-message').classList.add('room-loading');
+
+    // ユーザメッセージをログに追加
+    char.roomLogs.push({ role: 'user', text, timestamp: new Date().toISOString() });
+    if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
+    saveData();
+
+    try {
+        const systemPrompt = await buildRoomContext(char);
+        const raw = await callRoomAPI(systemPrompt, text);
+        const parsed = parseRoomResponse(raw);
+        roomLog('返信応答:', parsed);
+
+        // 返答をログに追加
+        char.roomLogs.push({
+            role: 'model', text: parsed.message,
+            mood: parsed.mood, timestamp: new Date().toISOString()
+        });
+        if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
+
+        applyRoomResponse(char, parsed);
+        document.getElementById('room-char-message').textContent = parsed.message || '…';
+        document.getElementById('room-char-message').classList.remove('room-loading');
+    } catch (e) {
+        roomLog('返信エラー:', e.message);
+        document.getElementById('room-char-message').textContent = '(エラーが発生しました: ' + e.message + ')';
+        document.getElementById('room-char-message').classList.remove('room-loading');
+    } finally {
+        input.disabled = false;
+        document.getElementById('btn-room-send').disabled = false;
+        input.focus();
+        isRoomBusy = false;
+    }
+}
+
+// --- グッズ贈呈処理 ---
+async function handleRoomGift() {
+    const input = document.getElementById('room-gift-input');
+    const name = input.value.trim();
+    if (!name) return;
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    char.roomState.items.push({ name, acquiredAt: new Date().toISOString() });
+    char.roomLogs.push({ role: 'user', text: `【グッズを贈呈: ${name}】`, timestamp: new Date().toISOString() });
+    if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
+    saveData();
+    input.value = '';
+    renderRoomItems();
+    roomLog('グッズ贈呈:', name);
+}
+
+// --- データ量チェック（AI要約→長期記憶、ユーザ確認付き） ---
+async function checkDataLimits(char) {
+    ensureRoomData(char);
+    if (char.diary.length > 60) {
+        const surplus = char.diary.length - 60;
+        const oldEntries = char.diary.slice(0, surplus);
+        const msg = `日記が${char.diary.length}件あります。古い${surplus}件をAIで要約して長期記憶に移しますか？\n（移行後、元の日記は削除されます）`;
+        if (confirm(msg)) {
+            try {
+                const summaryText = oldEntries.map(d => `[${d.date}] ${d.content}`).join('\n');
+                const prompt = `以下の日記を短く要約してください。要約のテキストのみ出力してください。\n\n${summaryText}`;
+                const summary = await callRoomAPI(prompt, '要約してください');
+                const period = `${oldEntries[0].date} 〜 ${oldEntries[oldEntries.length - 1].date}`;
+                char.roomLongTermMemory.push({ period, summary, createdAt: new Date().toISOString() });
+                char.diary = char.diary.slice(surplus);
+                saveData();
+                roomLog('日記要約→長期記憶移行完了:', period);
+            } catch (e) {
+                roomLog('日記要約失敗:', e.message);
+                alert('日記の要約中にエラーが発生しました: ' + e.message);
+            }
+        }
+    }
+}
+
+// --- 描画関数群 ---
+function renderRoomDiary() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+
+    // 長期記憶
+    const ltmArea = document.getElementById('room-long-term-memory-area');
+    ltmArea.innerHTML = '';
+    if (char.roomLongTermMemory.length > 0) {
+        const section = document.createElement('div');
+        section.className = 'room-long-term-section';
+        section.innerHTML = '<h3>📚 長期記憶（過去の要約）</h3>';
+        char.roomLongTermMemory.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'room-long-term-entry';
+            div.textContent = `[${escapeHtml(m.period)}] ${escapeHtml(m.summary)}`;
+            section.appendChild(div);
+        });
+        ltmArea.appendChild(section);
+    }
+
+    // 日記
+    const listDiv = document.getElementById('room-diary-list');
+    listDiv.innerHTML = '';
+    if (char.diary.length === 0) {
+        listDiv.innerHTML = '<div class="room-empty-msg">まだ日記はありません。</div>';
+        return;
+    }
+    [...char.diary].reverse().forEach(d => {
+        const entry = document.createElement('div');
+        entry.className = 'room-diary-entry';
+        entry.innerHTML = `<div class="room-entry-date">${escapeHtml(d.date)}</div><div class="room-entry-content">${escapeHtml(d.content)}</div>`;
+        listDiv.appendChild(entry);
+    });
+}
+
+function renderRoomSchedule() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    const div = document.getElementById('room-schedule-content');
+    div.innerHTML = '';
+    if (!char.roomState.schedule) {
+        div.innerHTML = '<div class="room-empty-msg">スケジュールはまだ生成されていません。</div>';
+        return;
+    }
+    const s = char.roomState.schedule;
+    const items = [
+        { time: s.wake_up || '-', label: '起床' },
+        { time: '', label: s.morning || '-', prefix: '午前' },
+        { time: '', label: s.noon || '-', prefix: '昼' },
+        { time: '', label: s.evening || '-', prefix: '夕方' },
+        { time: '', label: s.night || '-', prefix: '夜' },
+        { time: '', label: s.late_night || '-', prefix: '深夜' },
+        { time: s.bed_time || '-', label: '就寝' }
+    ];
+    items.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'room-schedule-item';
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'room-schedule-time';
+        timeSpan.textContent = item.prefix ? item.prefix : item.time;
+        const actSpan = document.createElement('span');
+        actSpan.className = 'room-schedule-activity';
+        actSpan.textContent = item.prefix ? item.label : item.label;
+        row.appendChild(timeSpan);
+        row.appendChild(actSpan);
+        div.appendChild(row);
+    });
+}
+
+function renderRoomItems() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    const div = document.getElementById('room-items-list');
+    div.innerHTML = '';
+    if (char.roomState.items.length === 0) {
+        div.innerHTML = '<div class="room-empty-msg">グッズはありません。</div>';
+        return;
+    }
+    char.roomState.items.forEach(item => {
+        const entry = document.createElement('div');
+        entry.className = 'room-item-entry';
+        entry.innerHTML = `<span class="room-item-name">${escapeHtml(item.name)}</span><span class="room-item-date">${formatDate(item.acquiredAt)}</span>`;
+        div.appendChild(entry);
+    });
+}
+
+function renderRoomLogs() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    const div = document.getElementById('room-logs-list');
+    div.innerHTML = '';
+    if (char.roomLogs.length === 0) {
+        div.innerHTML = '<div class="room-empty-msg">会話ログはありません。</div>';
+        return;
+    }
+    char.roomLogs.forEach(log => {
+        const entry = document.createElement('div');
+        entry.className = 'room-log-entry';
+        const roleClass = log.role === 'user' ? 'room-log-role-user' : 'room-log-role-char';
+        const roleName = log.role === 'user' ? 'ユーザ' : char.name;
+        entry.innerHTML = `<div class="room-log-role ${roleClass}">${escapeHtml(roleName)} (${formatDate(log.timestamp)})</div><div class="room-entry-content">${escapeHtml(log.text)}</div>`;
+        div.appendChild(entry);
+    });
+}
+
+// --- Room設定の読込・保存 ---
+function loadRoomSettingsForm() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    const rs = char.roomSettings;
+    document.getElementById('room-img-bg-morning').value = rs.bgMorning || '';
+    document.getElementById('room-img-bg-evening').value = rs.bgEvening || '';
+    document.getElementById('room-img-bg-night').value = rs.bgNight || '';
+    document.getElementById('room-img-weather-sunny').value = rs.weatherSunny || '';
+    document.getElementById('room-img-weather-cloudy').value = rs.weatherCloudy || '';
+    document.getElementById('room-img-weather-rainy').value = rs.weatherRainy || '';
+    document.getElementById('room-img-weather-snowy').value = rs.weatherSnowy || '';
+    document.getElementById('room-img-char-normal').value = rs.charNormal || '';
+    document.getElementById('room-img-char-happy').value = rs.charHappy || '';
+    document.getElementById('room-img-char-angry').value = rs.charAngry || '';
+    document.getElementById('room-img-char-sad').value = rs.charSad || '';
+    document.getElementById('room-img-char-sleepy').value = rs.charSleepy || '';
+}
+
+function saveRoomSettingsForm() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    char.roomSettings.bgMorning = document.getElementById('room-img-bg-morning').value.trim();
+    char.roomSettings.bgEvening = document.getElementById('room-img-bg-evening').value.trim();
+    char.roomSettings.bgNight = document.getElementById('room-img-bg-night').value.trim();
+    char.roomSettings.weatherSunny = document.getElementById('room-img-weather-sunny').value.trim();
+    char.roomSettings.weatherCloudy = document.getElementById('room-img-weather-cloudy').value.trim();
+    char.roomSettings.weatherRainy = document.getElementById('room-img-weather-rainy').value.trim();
+    char.roomSettings.weatherSnowy = document.getElementById('room-img-weather-snowy').value.trim();
+    char.roomSettings.charNormal = document.getElementById('room-img-char-normal').value.trim();
+    char.roomSettings.charHappy = document.getElementById('room-img-char-happy').value.trim();
+    char.roomSettings.charAngry = document.getElementById('room-img-char-angry').value.trim();
+    char.roomSettings.charSad = document.getElementById('room-img-char-sad').value.trim();
+    char.roomSettings.charSleepy = document.getElementById('room-img-char-sleepy').value.trim();
+    saveData();
+    updateRoomVisuals(char);
+    showView('room');
+    roomLog('Room設定保存完了');
+}
+
+// ============================================================
+// 11. INITIALIZATION
 // ============================================================
 function init() {
     loadData();
