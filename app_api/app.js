@@ -1373,7 +1373,6 @@ function ensureRoomData(char) {
     if (!char.roomSettings) {
         char.roomSettings = {
             bgMorning: '', bgEvening: '', bgNight: '',
-            weatherSunny: '', weatherCloudy: '', weatherRainy: '', weatherSnowy: '',
             charNormal: '', charHappy: '', charAngry: '', charSad: '', charSleepy: ''
         };
     }
@@ -1489,14 +1488,19 @@ async function updateRoomVisuals(char) {
 
     // 天気
     const weather = state.weatherCache?.weather || 'sunny';
-    const weatherKeyMap = { sunny: 'weatherSunny', cloudy: 'weatherCloudy', rainy: 'weatherRainy', snowy: 'weatherSnowy' };
-    const wKey = weatherKeyMap[weather];
-    if (wKey) {
-        const hasImg = await loadImg('weather', wKey, weatherWin);
-        weatherWin.style.display = hasImg ? 'block' : 'none';
-    } else {
-        if (roomBlobUrls.weather) URL.revokeObjectURL(roomBlobUrls.weather);
+    const weatherFileMap = { sunny: 'hare.png', cloudy: 'kumori.png', rainy: 'ame.png', snowy: 'yuki.png' };
+    const wFile = weatherFileMap[weather];
+
+    // 以前のObjectURLが残っていれば破棄
+    if (roomBlobUrls.weather) {
+        URL.revokeObjectURL(roomBlobUrls.weather);
         roomBlobUrls.weather = null;
+    }
+
+    if (wFile) {
+        weatherWin.style.backgroundImage = `url('../image/${wFile}')`;
+        weatherWin.style.display = 'block';
+    } else {
         weatherWin.style.backgroundImage = '';
         weatherWin.style.display = 'none';
     }
@@ -2186,7 +2190,7 @@ function loadRoomSettingsForm() {
         }
     };
 
-    const keys = ['bgMorning', 'bgEvening', 'bgNight', 'weatherSunny', 'weatherCloudy', 'weatherRainy', 'weatherSnowy', 'charNormal', 'charHappy', 'charAngry', 'charSad', 'charSleepy'];
+    const keys = ['bgMorning', 'bgEvening', 'bgNight', 'charNormal', 'charHappy', 'charAngry', 'charSad', 'charSleepy'];
     keys.forEach(k => loadPreview(k, `preview-${k}`));
 }
 
