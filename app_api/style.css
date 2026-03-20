@@ -1084,17 +1084,22 @@ input[type="password"] {
 /* ===== Room currentActivity / monologue ===== */
 .room-activity-area {
     position: absolute;
-    top: 60%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    /* === 安定する高さ（px）の指定 === */
+    top: calc(var(--safe-top) + 70px);
+    /* ↑お天気アイコン(60px)より10pxだけ下げた位置に固定。絶対に機嫌と被りません！ */
+
+    /* === 左寄せの配置設定 === */
+    left: 20px;
+    text-align: left;
+    /* transform: translateY(-50%); は削除する（上にめり込んで被るのを防ぐため） */
+
+    /* === 横幅(天気アイコンを避ける)設定 === */
     z-index: 5;
     pointer-events: none;
-    text-align: center;
-    width: 85%;
-    /* ← 追加: 基本の幅を広げる */
-    max-width: 85%;
-    /* ← 拡張: 最大幅も大きくする */
+    width: auto;
+    max-width: calc(100% - 160px);
 }
+
 
 .room-activity-text {
     background: rgba(0, 0, 0, 0.45);
