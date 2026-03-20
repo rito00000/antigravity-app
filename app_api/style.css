@@ -735,7 +735,7 @@ input[type="password"] {
     z-index: 3;
     background-size: contain;
     background-repeat: no-repeat;
-    background-position: bottom center;
+    background-position: center 80%; /* ← 数字を小さくするほど上に行きます (例: 80% 〜 90%) */
 }
 
 /* ヘッダー（機嫌表示） */
@@ -1083,13 +1083,17 @@ input[type="password"] {
 /* ===== Room currentActivity / monologue ===== */
 .room-activity-area {
     position: absolute;
-    top: 50%;
+    top: 70%;
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 5;
     pointer-events: none;
     text-align: center;
     max-width: 80%;
+    width: 90%;
+    /* ← 追加: 基本の幅を広げる */
+    max-width: 90%;
+    /* ← 拡張: 最大幅も大きくする */
 }
 
 .room-activity-text {
