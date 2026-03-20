@@ -11,7 +11,16 @@
     <link rel="apple-touch-icon" href="favicon.ico">
 
     <!-- JSZip for exporting logs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+        integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
+        crossorigin="anonymous"></script>
+    <!-- Cropper.js for image cropping -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css"
+        integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh"
+        crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"
+        integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir"
+        crossorigin="anonymous"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -255,6 +264,12 @@
             <div id="room-weather-window" class="room-weather-window"></div>
             <div id="room-char-layer" class="room-layer"></div>
 
+            <!-- currentActivity表示 -->
+            <div id="room-activity-area" class="room-activity-area">
+                <div id="room-current-activity" class="room-activity-text"></div>
+                <div id="room-monologue" class="room-monologue-text"></div>
+            </div>
+
             <div class="room-header-status">
                 <button id="btn-back-from-room" class="icon-btn" style="color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8);">◀</button>
                 <div class="room-mood-display">
@@ -339,39 +354,108 @@
             </header>
             <div class="content-area padding-area">
                 <h3 style="font-size:0.95rem; margin-bottom:8px;">背景画像</h3>
-                <p class="help-text">推奨サイズ: 1080 x 1920 (縦長)</p>
-                <label for="room-img-bg-morning">朝</label>
-                <input type="text" id="room-img-bg-morning" placeholder="画像URLを入力...">
-                <label for="room-img-bg-evening">夕方</label>
-                <input type="text" id="room-img-bg-evening" placeholder="画像URLを入力...">
-                <label for="room-img-bg-night">夜</label>
-                <input type="text" id="room-img-bg-night" placeholder="画像URLを入力...">
+                <p class="help-text">推奨: 縦長画像 (9:16)。タップで画像を選択・トリミングできます。</p>
+                <div class="room-img-upload-group">
+                    <div class="room-img-slot" data-key="bgMorning" data-aspect="0.5625" data-label="朝">
+                        <div class="room-img-preview" id="preview-bgMorning"></div>
+                        <span class="room-img-label">🌅 朝</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="bgEvening" data-aspect="0.5625" data-label="夕方">
+                        <div class="room-img-preview" id="preview-bgEvening"></div>
+                        <span class="room-img-label">🌇 夕方</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="bgNight" data-aspect="0.5625" data-label="夜">
+                        <div class="room-img-preview" id="preview-bgNight"></div>
+                        <span class="room-img-label">🌙 夜</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                </div>
 
                 <h3 style="font-size:0.95rem; margin-top:20px; margin-bottom:8px;">天気画像（窓）</h3>
-                <p class="help-text">推奨サイズ: 400 x 400 前後</p>
-                <label for="room-img-weather-sunny">晴</label>
-                <input type="text" id="room-img-weather-sunny" placeholder="画像URLを入力...">
-                <label for="room-img-weather-cloudy">曇り</label>
-                <input type="text" id="room-img-weather-cloudy" placeholder="画像URLを入力...">
-                <label for="room-img-weather-rainy">雨</label>
-                <input type="text" id="room-img-weather-rainy" placeholder="画像URLを入力...">
-                <label for="room-img-weather-snowy">雪</label>
-                <input type="text" id="room-img-weather-snowy" placeholder="画像URLを入力...">
+                <p class="help-text">推奨: 正方形 (1:1)。</p>
+                <div class="room-img-upload-group">
+                    <div class="room-img-slot" data-key="weatherSunny" data-aspect="1" data-label="晴">
+                        <div class="room-img-preview" id="preview-weatherSunny"></div>
+                        <span class="room-img-label">☀️ 晴</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="weatherCloudy" data-aspect="1" data-label="曇り">
+                        <div class="room-img-preview" id="preview-weatherCloudy"></div>
+                        <span class="room-img-label">☁️ 曇り</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="weatherRainy" data-aspect="1" data-label="雨">
+                        <div class="room-img-preview" id="preview-weatherRainy"></div>
+                        <span class="room-img-label">🌧️ 雨</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="weatherSnowy" data-aspect="1" data-label="雪">
+                        <div class="room-img-preview" id="preview-weatherSnowy"></div>
+                        <span class="room-img-label">❄️ 雪</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                </div>
 
                 <h3 style="font-size:0.95rem; margin-top:20px; margin-bottom:8px;">キャラクター画像（透過PNG推奨）</h3>
-                <p class="help-text">推奨サイズ: 1024 x 1024 前後</p>
-                <label for="room-img-char-normal">普通</label>
-                <input type="text" id="room-img-char-normal" placeholder="画像URLを入力...">
-                <label for="room-img-char-happy">ハッピー</label>
-                <input type="text" id="room-img-char-happy" placeholder="画像URLを入力...">
-                <label for="room-img-char-angry">イライラ</label>
-                <input type="text" id="room-img-char-angry" placeholder="画像URLを入力...">
-                <label for="room-img-char-sad">悲しみ</label>
-                <input type="text" id="room-img-char-sad" placeholder="画像URLを入力...">
-                <label for="room-img-char-sleepy">眠い</label>
-                <input type="text" id="room-img-char-sleepy" placeholder="画像URLを入力...">
+                <p class="help-text">推奨: 縦長 (3:4 前後)。透過PNGをそのまま保持します。</p>
+                <div class="room-img-upload-group">
+                    <div class="room-img-slot" data-key="charNormal" data-aspect="0.75" data-label="普通">
+                        <div class="room-img-preview" id="preview-charNormal"></div>
+                        <span class="room-img-label">😊 普通</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charHappy" data-aspect="0.75" data-label="ハッピー">
+                        <div class="room-img-preview" id="preview-charHappy"></div>
+                        <span class="room-img-label">😄 ハッピー</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charAngry" data-aspect="0.75" data-label="イライラ">
+                        <div class="room-img-preview" id="preview-charAngry"></div>
+                        <span class="room-img-label">😠 イライラ</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charSad" data-aspect="0.75" data-label="悲しみ">
+                        <div class="room-img-preview" id="preview-charSad"></div>
+                        <span class="room-img-label">😢 悲しみ</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charSleepy" data-aspect="0.75" data-label="眠い">
+                        <div class="room-img-preview" id="preview-charSleepy"></div>
+                        <span class="room-img-label">😴 眠い</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                </div>
 
                 <button id="btn-save-room-settings" class="primary-btn full-width margin-top">保存して戻る</button>
+            </div>
+        </div>
+
+        <!-- ===== Cropperモーダル ===== -->
+        <!-- <div id="cropper-modal" class="view modal-view" style="display:none; z-index:999;"> -->
+		<div id="cropper-modal" class="modal-view" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:999; flex-direction:column; background:rgba(0,0,0,0.85);">
+            <header class="app-header modal-header">
+                <h2>📐 画像のトリミング</h2>
+                <button id="btn-cancel-crop" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area" style="padding:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div id="cropper-container" style="width:100%; max-height:65vh; overflow:hidden;">
+                    <img id="cropper-image" src="" alt="crop" style="max-width:100%;">
+                </div>
+                <button id="btn-confirm-crop" class="primary-btn full-width margin-top">✂️ トリミングして保存</button>
             </div>
         </div>
 

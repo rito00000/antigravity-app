@@ -22,7 +22,8 @@
     padding: 0;
 }
 
-html, body {
+html,
+body {
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -191,7 +192,7 @@ button {
     height: 56px;
     border-radius: 50%;
     font-size: 2rem;
-    box-shadow: 0 4px 20px var(--accent-glow), 0 2px 8px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 20px var(--accent-glow), 0 2px 8px rgba(0, 0, 0, 0.5);
     z-index: 100;
     transition: transform 0.2s ease;
 }
@@ -291,8 +292,15 @@ button {
 }
 
 @keyframes msgFadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .msg-user {
@@ -510,9 +518,11 @@ input[type="password"] {
     .chat-input-area {
         padding-bottom: max(8px, env(safe-area-inset-bottom));
     }
+
     .floating-btn {
         bottom: max(24px, calc(16px + env(safe-area-inset-bottom)));
     }
+
     .padding-area {
         padding-bottom: max(16px, calc(8px + env(safe-area-inset-bottom)));
     }
@@ -592,8 +602,10 @@ input[type="password"] {
 /* レイヤー共通 */
 .room-layer {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background-size: cover;
     background-position: center;
     pointer-events: none;
@@ -601,95 +613,118 @@ input[type="password"] {
 }
 
 /* 背景レイヤー */
-#room-bg-layer { z-index: 1; }
+#room-bg-layer {
+    z-index: 1;
+}
 
 /* デフォルト星空背景 */
 .room-bg-default {
     background: linear-gradient(to bottom, #0a0e1a 0%, #111b2e 40%, #0d1117 100%);
 }
+
 .room-bg-default::before,
 .room-bg-default::after {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     pointer-events: none;
 }
+
 .room-bg-default::before {
-    width: 1px; height: 1px;
+    width: 1px;
+    height: 1px;
     box-shadow:
-        20vw 5vh 0 0 rgba(255,255,255,0.7),
-        75vw 8vh 0 0 rgba(255,255,255,0.5),
-        40vw 12vh 0 0 rgba(255,255,255,0.6),
-        10vw 18vh 0 0 rgba(255,255,255,0.4),
-        90vw 15vh 0 0 rgba(255,255,255,0.8),
-        55vw 22vh 0 0 rgba(255,255,255,0.5),
-        30vw 28vh 0 0 rgba(255,255,255,0.7),
-        80vw 25vh 0 0 rgba(255,255,255,0.3),
-        15vw 35vh 0 0 rgba(255,255,255,0.6),
-        65vw 32vh 0 0 rgba(255,255,255,0.5),
-        45vw 40vh 0 0 rgba(255,255,255,0.8),
-        5vw 42vh 0 0 rgba(255,255,255,0.4),
-        95vw 38vh 0 0 rgba(255,255,255,0.6),
-        25vw 48vh 0 0 rgba(255,255,255,0.5),
-        70vw 45vh 0 0 rgba(255,255,255,0.7),
-        50vw 55vh 0 0 rgba(255,255,255,0.4),
-        85vw 52vh 0 0 rgba(255,255,255,0.6),
-        35vw 58vh 0 0 rgba(255,255,255,0.8),
-        60vw 62vh 0 0 rgba(255,255,255,0.3),
-        8vw 65vh 0 0 rgba(255,255,255,0.5),
-        92vw 60vh 0 0 rgba(255,255,255,0.7),
-        42vw 72vh 0 0 rgba(255,255,255,0.4),
-        18vw 75vh 0 0 rgba(255,255,255,0.6),
-        78vw 70vh 0 0 rgba(255,255,255,0.5),
-        55vw 78vh 0 0 rgba(255,255,255,0.8),
-        28vw 82vh 0 0 rgba(255,255,255,0.3),
-        88vw 80vh 0 0 rgba(255,255,255,0.6),
-        12vw 88vh 0 0 rgba(255,255,255,0.5),
-        68vw 85vh 0 0 rgba(255,255,255,0.7),
-        38vw 92vh 0 0 rgba(255,255,255,0.4);
+        20vw 5vh 0 0 rgba(255, 255, 255, 0.7),
+        75vw 8vh 0 0 rgba(255, 255, 255, 0.5),
+        40vw 12vh 0 0 rgba(255, 255, 255, 0.6),
+        10vw 18vh 0 0 rgba(255, 255, 255, 0.4),
+        90vw 15vh 0 0 rgba(255, 255, 255, 0.8),
+        55vw 22vh 0 0 rgba(255, 255, 255, 0.5),
+        30vw 28vh 0 0 rgba(255, 255, 255, 0.7),
+        80vw 25vh 0 0 rgba(255, 255, 255, 0.3),
+        15vw 35vh 0 0 rgba(255, 255, 255, 0.6),
+        65vw 32vh 0 0 rgba(255, 255, 255, 0.5),
+        45vw 40vh 0 0 rgba(255, 255, 255, 0.8),
+        5vw 42vh 0 0 rgba(255, 255, 255, 0.4),
+        95vw 38vh 0 0 rgba(255, 255, 255, 0.6),
+        25vw 48vh 0 0 rgba(255, 255, 255, 0.5),
+        70vw 45vh 0 0 rgba(255, 255, 255, 0.7),
+        50vw 55vh 0 0 rgba(255, 255, 255, 0.4),
+        85vw 52vh 0 0 rgba(255, 255, 255, 0.6),
+        35vw 58vh 0 0 rgba(255, 255, 255, 0.8),
+        60vw 62vh 0 0 rgba(255, 255, 255, 0.3),
+        8vw 65vh 0 0 rgba(255, 255, 255, 0.5),
+        92vw 60vh 0 0 rgba(255, 255, 255, 0.7),
+        42vw 72vh 0 0 rgba(255, 255, 255, 0.4),
+        18vw 75vh 0 0 rgba(255, 255, 255, 0.6),
+        78vw 70vh 0 0 rgba(255, 255, 255, 0.5),
+        55vw 78vh 0 0 rgba(255, 255, 255, 0.8),
+        28vw 82vh 0 0 rgba(255, 255, 255, 0.3),
+        88vw 80vh 0 0 rgba(255, 255, 255, 0.6),
+        12vw 88vh 0 0 rgba(255, 255, 255, 0.5),
+        68vw 85vh 0 0 rgba(255, 255, 255, 0.7),
+        38vw 92vh 0 0 rgba(255, 255, 255, 0.4);
     animation: roomTwinkle1 4s ease-in-out infinite alternate;
 }
+
 .room-bg-default::after {
-    width: 2px; height: 2px;
+    width: 2px;
+    height: 2px;
     box-shadow:
-        48vw 3vh 0 0 rgba(255,255,255,0.9),
-        22vw 15vh 0 0 rgba(255,255,255,0.7),
-        82vw 20vh 0 0 rgba(255,255,255,0.8),
-        58vw 30vh 0 0 rgba(255,255,255,0.6),
-        12vw 38vh 0 0 rgba(255,255,255,0.9),
-        72vw 42vh 0 0 rgba(255,255,255,0.5),
-        35vw 50vh 0 0 rgba(255,255,255,0.8),
-        88vw 55vh 0 0 rgba(255,255,255,0.7),
-        5vw 60vh 0 0 rgba(255,255,255,0.6),
-        62vw 68vh 0 0 rgba(255,255,255,0.9),
-        45vw 75vh 0 0 rgba(255,255,255,0.5),
-        78vw 82vh 0 0 rgba(255,255,255,0.8),
-        25vw 90vh 0 0 rgba(255,255,255,0.7),
-        92vw 45vh 0 0 rgba(255,255,255,0.6),
-        15vw 52vh 0 0 rgba(255,255,255,0.9);
+        48vw 3vh 0 0 rgba(255, 255, 255, 0.9),
+        22vw 15vh 0 0 rgba(255, 255, 255, 0.7),
+        82vw 20vh 0 0 rgba(255, 255, 255, 0.8),
+        58vw 30vh 0 0 rgba(255, 255, 255, 0.6),
+        12vw 38vh 0 0 rgba(255, 255, 255, 0.9),
+        72vw 42vh 0 0 rgba(255, 255, 255, 0.5),
+        35vw 50vh 0 0 rgba(255, 255, 255, 0.8),
+        88vw 55vh 0 0 rgba(255, 255, 255, 0.7),
+        5vw 60vh 0 0 rgba(255, 255, 255, 0.6),
+        62vw 68vh 0 0 rgba(255, 255, 255, 0.9),
+        45vw 75vh 0 0 rgba(255, 255, 255, 0.5),
+        78vw 82vh 0 0 rgba(255, 255, 255, 0.8),
+        25vw 90vh 0 0 rgba(255, 255, 255, 0.7),
+        92vw 45vh 0 0 rgba(255, 255, 255, 0.6),
+        15vw 52vh 0 0 rgba(255, 255, 255, 0.9);
     animation: roomTwinkle2 5s ease-in-out infinite alternate;
 }
+
 @keyframes roomTwinkle1 {
-    from { opacity: 0.4; }
-    to { opacity: 1; }
+    from {
+        opacity: 0.4;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
+
 @keyframes roomTwinkle2 {
-    from { opacity: 0.3; }
-    to { opacity: 0.85; }
+    from {
+        opacity: 0.3;
+    }
+
+    to {
+        opacity: 0.85;
+    }
 }
 
 /* 天気（窓）*/
 .room-weather-window {
     position: absolute;
     top: calc(var(--safe-top) + 60px);
-    right: 15px;
-    width: 120px; height: 120px;
+    right: 20px;
+    width: 120px;
+    height: 120px;
     z-index: 2;
     border-radius: 50%;
-    border: 3px solid rgba(255,255,255,0.15);
+    border: 3px solid rgba(255, 255, 255, 0.15);
     background-size: cover;
     background-position: center;
-    box-shadow: 0 0 20px rgba(100,150,255,0.15), inset 0 0 15px rgba(0,0,0,0.3);
+    box-shadow: 0 0 20px rgba(100, 150, 255, 0.15), inset 0 0 15px rgba(0, 0, 0, 0.3);
     pointer-events: none;
     opacity: 0.9;
     transition: background-image 0.5s ease;
@@ -707,15 +742,17 @@ input[type="password"] {
 .room-header-status {
     position: absolute;
     top: var(--safe-top);
-    left: 0; width: 100%;
+    left: 0;
+    width: 100%;
     padding: 10px 14px;
     z-index: 10;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
+
 .room-mood-display {
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
     padding: 6px 16px;
@@ -723,7 +760,7 @@ input[type="password"] {
     font-size: 0.9rem;
     font-weight: bold;
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -732,48 +769,60 @@ input[type="password"] {
 /* 下部UIコンテナ */
 .room-ui-container {
     position: absolute;
-    bottom: 0; left: 0; width: 100%;
+    bottom: 0;
+    left: 0;
+    width: 100%;
     z-index: 10;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 60%, transparent 100%);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.75) 60%, transparent 100%);
     padding: 30px 14px calc(10px + var(--safe-bottom));
     gap: 10px;
 }
+
 .room-message-box {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.15);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 12px;
     padding: 12px 16px;
     min-height: 60px;
     display: flex;
     align-items: center;
 }
+
 .room-text {
     color: #fff;
     font-size: 0.95rem;
     line-height: 1.5;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
+
 .room-reply-area {
     display: flex;
     gap: 8px;
     align-items: center;
 }
+
 #room-reply-input {
     flex-grow: 1;
-    background: rgba(0,0,0,0.6);
-    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     color: #fff;
     padding: 10px 14px;
     border-radius: 20px;
     font-size: 0.9rem;
     font-family: inherit;
 }
-#room-reply-input::placeholder { color: rgba(255,255,255,0.45); }
-#room-reply-input:disabled { opacity: 0.5; }
+
+#room-reply-input::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+#room-reply-input:disabled {
+    opacity: 0.5;
+}
 
 /* 下部ナビゲーション */
 .room-nav {
@@ -784,19 +833,26 @@ input[type="password"] {
     padding-bottom: 2px;
     -webkit-overflow-scrolling: touch;
 }
-.room-nav::-webkit-scrollbar { display: none; }
+
+.room-nav::-webkit-scrollbar {
+    display: none;
+}
+
 .room-nav-btn {
     flex: 1;
     min-width: max-content;
     padding: 7px 10px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     color: #ddd;
     font-size: 0.75rem;
     transition: background 0.2s;
 }
-.room-nav-btn:active { background: rgba(255,255,255,0.25); }
+
+.room-nav-btn:active {
+    background: rgba(255, 255, 255, 0.25);
+}
 
 /* Roomボタン（thread-actions内） */
 .room-btn {
@@ -806,23 +862,29 @@ input[type="password"] {
 }
 
 /* Room各種モーダル共通 */
-.room-diary-entry, .room-log-entry {
+.room-diary-entry,
+.room-log-entry {
     padding: 12px 0;
     border-bottom: 1px solid var(--border-color);
 }
-.room-diary-entry:last-child, .room-log-entry:last-child {
+
+.room-diary-entry:last-child,
+.room-log-entry:last-child {
     border-bottom: none;
 }
+
 .room-entry-date {
     font-size: 0.72rem;
     color: var(--text-secondary);
     margin-bottom: 4px;
 }
+
 .room-entry-content {
     font-size: 0.9rem;
     line-height: 1.5;
     white-space: pre-wrap;
 }
+
 .room-schedule-item {
     display: flex;
     gap: 12px;
@@ -830,16 +892,22 @@ input[type="password"] {
     border-bottom: 1px solid var(--border-color);
     align-items: baseline;
 }
-.room-schedule-item:last-child { border-bottom: none; }
+
+.room-schedule-item:last-child {
+    border-bottom: none;
+}
+
 .room-schedule-time {
     font-size: 0.8rem;
     color: var(--accent-color);
     font-weight: 600;
     min-width: 60px;
 }
+
 .room-schedule-activity {
     font-size: 0.9rem;
 }
+
 .room-item-entry {
     display: flex;
     justify-content: space-between;
@@ -847,9 +915,19 @@ input[type="password"] {
     padding: 10px 0;
     border-bottom: 1px solid var(--border-color);
 }
-.room-item-entry:last-child { border-bottom: none; }
-.room-item-name { font-size: 0.9rem; }
-.room-item-date { font-size: 0.7rem; color: var(--text-secondary); }
+
+.room-item-entry:last-child {
+    border-bottom: none;
+}
+
+.room-item-name {
+    font-size: 0.9rem;
+}
+
+.room-item-date {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
 
 /* グッズ贈呈エリア */
 .room-gift-area {
@@ -859,9 +937,11 @@ input[type="password"] {
     padding-top: 16px;
     border-top: 1px solid var(--border-color);
 }
+
 .room-gift-area input {
     flex: 1;
 }
+
 .room-gift-area .primary-btn {
     flex-shrink: 0;
     white-space: nowrap;
@@ -875,11 +955,13 @@ input[type="password"] {
     padding: 12px;
     margin-bottom: 16px;
 }
+
 .room-long-term-section h3 {
     font-size: 0.85rem;
     margin-bottom: 8px;
     color: var(--accent-color);
 }
+
 .room-long-term-entry {
     font-size: 0.82rem;
     line-height: 1.4;
@@ -887,7 +969,10 @@ input[type="password"] {
     border-bottom: 1px solid var(--border-color);
     white-space: pre-wrap;
 }
-.room-long-term-entry:last-child { border-bottom: none; }
+
+.room-long-term-entry:last-child {
+    border-bottom: none;
+}
 
 /* Room空状態メッセージ */
 .room-empty-msg {
@@ -899,7 +984,7 @@ input[type="password"] {
 
 /* Room ローディング */
 .room-loading {
-    color: rgba(255,255,255,0.6);
+    color: rgba(255, 255, 255, 0.6);
     font-style: italic;
 }
 
@@ -908,5 +993,181 @@ input[type="password"] {
     font-weight: 600;
     margin-bottom: 2px;
 }
-.room-log-role-user { color: var(--accent-color); }
-.room-log-role-char { color: #6dd; }
+
+.room-log-role-user {
+    color: var(--accent-color);
+}
+
+.room-log-role-char {
+    color: #6dd;
+}
+
+/* ===== Room 画像アップロードUI ===== */
+.room-img-upload-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.room-img-slot {
+    position: relative;
+    width: 90px;
+    height: 120px;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    background: var(--surface-color);
+}
+
+.room-img-slot:active {
+    border-color: var(--accent-color);
+}
+
+.room-img-slot.has-image {
+    border-style: solid;
+}
+
+.room-img-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    pointer-events: none;
+}
+
+.room-img-label {
+    position: relative;
+    z-index: 1;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-align: center;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+}
+
+.room-img-slot.has-image .room-img-label {
+    position: absolute;
+    bottom: 2px;
+    color: #fff;
+}
+
+.room-img-delete-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(220, 50, 50, 0.85);
+    color: #fff;
+    font-size: 0.6rem;
+    line-height: 1;
+    z-index: 2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ===== Room currentActivity / monologue ===== */
+.room-activity-area {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    pointer-events: none;
+    text-align: center;
+    max-width: 80%;
+}
+
+.room-activity-text {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.78rem;
+    padding: 5px 14px;
+    border-radius: 16px;
+    display: inline-block;
+    margin-bottom: 6px;
+    animation: roomFadeIn 0.6s ease;
+    max-width: 100%;
+}
+
+.room-monologue-text {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.72rem;
+    font-style: italic;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+    animation: roomFadeIn 0.8s ease;
+}
+
+.room-activity-text:empty,
+.room-monologue-text:empty {
+    display: none;
+}
+
+@keyframes roomFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== Room グッズ state 表示 ===== */
+.room-item-state {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.room-item-gifted-badge {
+    font-size: 0.6rem;
+    background: var(--accent-color);
+    color: #000;
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 6px;
+    font-weight: bold;
+}
+
+/* Room log system message */
+.room-log-role-system {
+    color: #aaa;
+    font-style: italic;
+}
+
+/* Room bath badge */
+.room-bath-badge {
+    position: absolute;
+    top: calc(var(--safe-top) + 50px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    background: rgba(100, 180, 255, 0.3);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    color: #adf;
+    font-size: 0.8rem;
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(100, 180, 255, 0.25);
+}

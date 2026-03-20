@@ -1,6 +1,6 @@
 /**
  * Antigravity Chat App - app.js
- * 全面レビュー・修正版 v2
+ * 全面レビュー・修正版 v3 (IndexedDB対応)
  */
 
 // ============================================================
@@ -18,26 +18,90 @@ const AppState = {
 };
 
 // ============================================================
-// 2. LOCAL STORAGE
+// 2. INDEXED-DB STORAGE
 // ============================================================
-function loadData() {
+const DB_NAME = 'antigravity_chat';
+const DB_VERSION = 1;
+const STORE_APP = 'appData';
+const STORE_IMAGES = 'roomImages';
+let _db = null;
+
+/** IndexedDBを開く（初回はストア作成） */
+function openDB() {
+    return new Promise((resolve, reject) => {
+        if (_db) return resolve(_db);
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_APP)) {
+                db.createObjectStore(STORE_APP);
+            }
+            if (!db.objectStoreNames.contains(STORE_IMAGES)) {
+                db.createObjectStore(STORE_IMAGES);
+            }
+        };
+        req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
+        req.onerror = (e) => { console.error('IndexedDB open error:', e); reject(e); };
+    });
+}
+
+/** IndexedDBからデータを読み込む */
+async function loadData() {
     try {
+        const db = await openDB();
+        const data = await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_APP, 'readonly');
+            const store = tx.objectStore(STORE_APP);
+            const req = store.get('main');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        if (data) {
+            AppState.apiKey = data.apiKey || '';
+            AppState.model = data.model || 'gemini-3.1-flash-lite-preview';
+            AppState.roomModel = data.roomModel || 'gemini-3.1-flash-lite-preview';
+            AppState.characters = Array.isArray(data.characters) ? data.characters : [];
+            AppState.threads = Array.isArray(data.threads) ? data.threads : [];
+            AppState.memories = Array.isArray(data.memories) ? data.memories : [];
+            console.log('[DB] IndexedDBからデータ読込完了');
+            return;
+        }
+        // IndexedDBにデータが無い場合、localStorageからマイグレーション
         const raw = localStorage.getItem('chatApp_data');
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        AppState.apiKey = parsed.apiKey || '';
-        AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
-        AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
-        AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
-        AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
-        AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            AppState.apiKey = parsed.apiKey || '';
+            AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
+            AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
+            AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
+            AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
+            AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
+            await saveData(); // IndexedDBに移行保存
+            console.log('[DB] localStorageからIndexedDBへマイグレーション完了');
+        }
     } catch (e) {
         console.error('データの読み込みに失敗しました:', e);
+        // フォールバック: localStorageから読み込み
+        try {
+            const raw = localStorage.getItem('chatApp_data');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                AppState.apiKey = parsed.apiKey || '';
+                AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
+                AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
+                AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
+                AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
+                AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
+                console.log('[DB] フォールバック: localStorageからデータ読込');
+            }
+        } catch (e2) { console.error('localStorageフォールバックも失敗:', e2); }
     }
 }
 
-function saveData() {
+/** IndexedDBにデータを保存する */
+async function saveData() {
     try {
+        const db = await openDB();
         const dataToSave = {
             apiKey: AppState.apiKey,
             model: AppState.model,
@@ -46,10 +110,68 @@ function saveData() {
             threads: AppState.threads,
             memories: AppState.memories
         };
-        localStorage.setItem('chatApp_data', JSON.stringify(dataToSave));
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_APP, 'readwrite');
+            const store = tx.objectStore(STORE_APP);
+            const req = store.put(dataToSave, 'main');
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
     } catch (e) {
         console.error('データの保存に失敗しました:', e);
         alert('データの保存に失敗しました。ストレージ容量をご確認ください。');
+    }
+}
+
+/** 画像BlobをIndexedDBに保存 (key: "charId_imageType") */
+async function saveImageToDB(key, blob) {
+    try {
+        const db = await openDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_IMAGES, 'readwrite');
+            const store = tx.objectStore(STORE_IMAGES);
+            const req = store.put(blob, key);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) { console.error('[DB] 画像保存失敗:', key, e); }
+}
+
+/** 画像BlobをIndexedDBから取得→ObjectURL生成 */
+async function loadImageFromDB(key) {
+    try {
+        const db = await openDB();
+        const blob = await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_IMAGES, 'readonly');
+            const store = tx.objectStore(STORE_IMAGES);
+            const req = store.get(key);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        if (blob) return URL.createObjectURL(blob);
+        return null;
+    } catch (e) { console.error('[DB] 画像読込失敗:', key, e); return null; }
+}
+
+/** 画像BlobをIndexedDBから削除 */
+async function deleteImageFromDB(key) {
+    try {
+        const db = await openDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_IMAGES, 'readwrite');
+            const store = tx.objectStore(STORE_IMAGES);
+            const req = store.delete(key);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) { console.error('[DB] 画像削除失敗:', key, e); }
+}
+
+/** ストレージ永続化リクエスト */
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const granted = await navigator.storage.persist();
+        console.log('[DB] ストレージ永続化:', granted ? '許可' : '拒否');
     }
 }
 
@@ -864,6 +986,8 @@ function setupEventListeners() {
     document.getElementById('btn-save-room-settings').onclick = saveRoomSettingsForm;
     // Room Gift
     document.getElementById('btn-room-gift').onclick = handleRoomGift;
+    // Room Settings Cropper Events (初期化)
+    setupRoomSettingsEvents();
 }
 
 // ============================================================
@@ -1284,51 +1408,113 @@ function getMoodDisplay(mood, moodValue) {
 /** 現在の時間帯を返す: morning / evening / night */
 function getTimeOfDay() {
     const h = new Date().getHours();
-    if (h >= 5 && h < 17) return 'morning';
-    if (h >= 17 && h < 20) return 'evening';
+    if (h >= 5 && h < 16) return 'morning';
+    if (h >= 16 && h < 19) return 'evening';
     return 'night';
 }
 
+/** お風呂時間判定 */
+function isInBathTime(schedule) {
+    if (!schedule || !schedule.bath_time) return false;
+    const match = schedule.bath_time.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (!match) return false;
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    
+    let startMins = parseInt(match[1]) * 60 + parseInt(match[2]);
+    let endMins = parseInt(match[3]) * 60 + parseInt(match[4]);
+    
+    if (endMins < startMins) {
+        // 日付跨ぎ
+        if (currentMins >= startMins || currentMins < endMins) return true;
+    } else {
+        if (currentMins >= startMins && currentMins < endMins) return true;
+    }
+    return false;
+}
+
+// ObjectURLのキャッシュ（メモリリーク防止用）
+const roomBlobUrls = { bg: null, weather: null, char: null };
+
 /** Room画面のビジュアルを更新（背景・天気・キャラ画像・機嫌） */
-function updateRoomVisuals(char) {
+async function updateRoomVisuals(char) {
     ensureRoomData(char);
-    const rs = char.roomSettings;
     const state = char.roomState;
     const bgLayer = document.getElementById('room-bg-layer');
     const weatherWin = document.getElementById('room-weather-window');
     const charLayer = document.getElementById('room-char-layer');
+    
+    // お風呂判定
+    const isBath = isInBathTime(state.schedule);
+    let existingBadge = document.getElementById('room-bath-badge');
+    if (isBath) {
+        if (!existingBadge) {
+            existingBadge = document.createElement('div');
+            existingBadge.id = 'room-bath-badge';
+            existingBadge.className = 'room-bath-badge';
+            existingBadge.textContent = '♨️ 現在入浴中';
+            document.getElementById('room-view').appendChild(existingBadge);
+        }
+    } else if (existingBadge) {
+        existingBadge.remove();
+    }
+
+    // 画像ロード補助関数
+    const loadImg = async (type, key, element) => {
+        if (roomBlobUrls[type]) URL.revokeObjectURL(roomBlobUrls[type]);
+        const url = await loadImageFromDB(`${char.id}_${key}`);
+        roomBlobUrls[type] = url;
+        if (url) {
+            element.style.backgroundImage = `url('${url}')`;
+            return true;
+        } else {
+            element.style.backgroundImage = '';
+            return false;
+        }
+    };
 
     // 背景
     const tod = getTimeOfDay();
-    const bgMap = { morning: rs.bgMorning, evening: rs.bgEvening, night: rs.bgNight };
-    const bgUrl = bgMap[tod];
-    if (bgUrl) {
-        bgLayer.className = 'room-layer';
-        bgLayer.style.backgroundImage = `url('${bgUrl}')`;
+    const bgKeyMap = { morning: 'bgMorning', evening: 'bgEvening', night: 'bgNight' };
+    const bgKey = bgKeyMap[tod];
+    if (bgKey) {
+        const hasImg = await loadImg('bg', bgKey, bgLayer);
+        bgLayer.className = hasImg ? 'room-layer' : 'room-layer room-bg-default';
     } else {
+        if (roomBlobUrls.bg) URL.revokeObjectURL(roomBlobUrls.bg);
+        roomBlobUrls.bg = null;
         bgLayer.className = 'room-layer room-bg-default';
         bgLayer.style.backgroundImage = '';
     }
 
     // 天気
     const weather = state.weatherCache?.weather || 'sunny';
-    const weatherMap = { sunny: rs.weatherSunny, cloudy: rs.weatherCloudy, rainy: rs.weatherRainy, snowy: rs.weatherSnowy };
-    const wUrl = weatherMap[weather];
-    if (wUrl) {
-        weatherWin.style.backgroundImage = `url('${wUrl}')`;
-        weatherWin.style.display = 'block';
+    const weatherKeyMap = { sunny: 'weatherSunny', cloudy: 'weatherCloudy', rainy: 'weatherRainy', snowy: 'weatherSnowy' };
+    const wKey = weatherKeyMap[weather];
+    if (wKey) {
+        const hasImg = await loadImg('weather', wKey, weatherWin);
+        weatherWin.style.display = hasImg ? 'block' : 'none';
     } else {
+        if (roomBlobUrls.weather) URL.revokeObjectURL(roomBlobUrls.weather);
+        roomBlobUrls.weather = null;
         weatherWin.style.backgroundImage = '';
         weatherWin.style.display = 'none';
     }
 
     // キャラクター
     const mood = state.mood || 'normal';
-    const charMap = { normal: rs.charNormal, happy: rs.charHappy, angry: rs.charAngry, sad: rs.charSad, sleepy: rs.charSleepy };
-    const cUrl = charMap[mood];
-    if (cUrl) {
-        charLayer.style.backgroundImage = `url('${cUrl}')`;
+    const charKeyMap = { normal: 'charNormal', happy: 'charHappy', angry: 'charAngry', sad: 'charSad', sleepy: 'charSleepy' };
+    const cKey = charKeyMap[mood];
+    
+    if (isBath) {
+        if (roomBlobUrls.char) URL.revokeObjectURL(roomBlobUrls.char);
+        roomBlobUrls.char = null;
+        charLayer.style.backgroundImage = '';
+    } else if (cKey) {
+        await loadImg('char', cKey, charLayer);
     } else {
+        if (roomBlobUrls.char) URL.revokeObjectURL(roomBlobUrls.char);
+        roomBlobUrls.char = null;
         charLayer.style.backgroundImage = '';
     }
 
@@ -1418,11 +1604,9 @@ async function callRoomAPI(systemPrompt, userMessage) {
 /** AI応答のJSONをパースする（フォールバック付き） */
 function parseRoomResponse(text) {
     try {
-        // JSON部分を抽出（```json ... ``` のマークダウンブロック対応）
         let jsonStr = text;
         const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (mdMatch) jsonStr = mdMatch[1].trim();
-        // 直接JSONオブジェクトを探す
         if (!jsonStr.startsWith('{')) {
             const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
             if (braceMatch) jsonStr = braceMatch[0];
@@ -1433,11 +1617,18 @@ function parseRoomResponse(text) {
             mood: parsed.mood || 'normal',
             moodValue: typeof parsed.mood_value === 'number' ? Math.max(0, Math.min(100, parsed.mood_value)) : 50,
             gainedItems: Array.isArray(parsed.gained_items) ? parsed.gained_items : [],
-            lostItems: Array.isArray(parsed.lost_items) ? parsed.lost_items : []
+            lostItems: Array.isArray(parsed.lost_items) ? parsed.lost_items : [],
+            updatedItems: Array.isArray(parsed.updated_items) ? parsed.updated_items : [],
+            currentActivity: parsed.current_activity || '',
+            monologue: parsed.monologue || ''
         };
     } catch (e) {
         roomLog('JSONパース失敗、テキストで返却:', e.message);
-        return { message: text, mood: 'normal', moodValue: 50, gainedItems: [], lostItems: [] };
+        return { 
+            message: text, mood: 'normal', moodValue: 50, 
+            gainedItems: [], lostItems: [], updatedItems: [], 
+            currentActivity: '', monologue: '' 
+        };
     }
 }
 
@@ -1468,15 +1659,23 @@ async function buildRoomContext(char) {
     const weatherNames = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
     ctx += `今日の天気: ${weatherNames[weather] || '晴れ'}\n`;
     ctx += `現在の機嫌: ${char.roomState.mood} (${char.roomState.moodValue}/100)\n`;
-    const itemNames = char.roomState.items.map(i => i.name).join(', ') || 'なし';
-    ctx += `所持グッズ: ${itemNames}\n`;
+    
+    // グッズ一覧（state, gifted対応）
+    const itemsList = char.roomState.items.map(i => {
+        let txt = i.name;
+        if (i.gifted) txt += ' (ユーザからの贈り物)';
+        if (i.state) txt += ` [状態: ${i.state}]`;
+        return txt;
+    }).join('\n- ') || 'なし';
+    ctx += `所持グッズ:\n- ${itemsList}\n`;
 
     // スケジュール
     if (char.roomState.schedule) {
         const s = char.roomState.schedule;
         ctx += '\n【本日のスケジュール】\n';
-        ctx += `起床: ${s.wake_up || '?'}\n午前: ${s.morning || '?'}\n昼: ${s.noon || '?'}\n`;
-        ctx += `夕方: ${s.evening || '?'}\n夜: ${s.night || '?'}\n深夜: ${s.late_night || '?'}\n就寝: ${s.bed_time || '?'}\n`;
+        ctx += `起床:${s.wake_up||'?'} 午前:${s.morning||'?'} 昼:${s.noon||'?'}\n`;
+        ctx += `夕方:${s.evening||'?'} 夜:${s.night||'?'} 睡眠等:${s.late_night||'?'} 就寝:${s.bed_time||'?'}\n`;
+        if (s.bath_time) ctx += `風呂:${s.bath_time}\n`;
     }
 
     // room会話ログ（直近30件）
@@ -1484,7 +1683,7 @@ async function buildRoomContext(char) {
     if (recentLogs.length > 0) {
         ctx += '\n【最近のRoomでの会話 (直近30件)】\n';
         recentLogs.forEach(l => {
-            const role = l.role === 'user' ? 'ユーザ' : char.name;
+            const role = l.role === 'user' ? 'ユーザ' : (l.role === 'system' ? 'システム' : char.name);
             ctx += `[${role} ${formatDate(l.timestamp)}] ${l.text}\n`;
         });
     }
@@ -1528,41 +1727,89 @@ async function buildRoomContext(char) {
         if (ctxStr) ctx += '\n\n' + ctxStr;
     }
 
+    const isBath = isInBathTime(char.roomState.schedule);
+
     // 返答ルール
-    ctx += `\n\n【返答ルール】
-あなたはRoomを訪れたユーザに対して、キャラクターとして自然に話しかけてください。枠に入る程度の一言〜二言で返してください。
-必ず以下のJSON形式のみで返答してください。JSON以外のテキストは出力しないでください。
-{"message": "あなたの発言テキスト", "mood": "normal", "mood_value": 50, "gained_items": [], "lost_items": []}
-- message: ユーザへの発言
-- mood: 現在の気分 (normal/happy/angry/sad/sleepy のいずれか)
-- mood_value: 機嫌値 0-100 (0=最悪, 50=普通, 100=最高)
-- gained_items: 新たに手に入れたグッズの名前の配列（なければ空配列） ※現実的な範囲のもの
-- lost_items: 手放したグッズの名前の配列（なければ空配列）`;
+    ctx += `\n\n【状況と指示】
+ユーザがあなたのRoomを訪れました。（または会話の続きです）
+現在あなたは以下の状態です。
+- 時刻: ${new Date().toLocaleTimeString('ja-JP')}
+- スケジュール上の状況: ${isBath ? '現在お風呂に入っています（ユーザからは姿が見えず、声だけが聞こえる状態です）' : '室内にいます'}
+
+必ず以下のJSON形式のみで返答してください。JSON以外のテキストは絶対に出力しないでください。
+{
+  "message": "ユーザへの発言テキスト（お風呂中の場合はお風呂の中から返答すること）",
+  "current_activity": "あなたが【今この瞬間】何をしているかの具体的な状況描写(例: 本のページをめくっている、お風呂で鼻歌をうたっている 等)",
+  "monologue": "今のあなたの心の中の独り言",
+  "mood": "normal/happy/angry/sad/sleepy のいずれか",
+  "mood_value": 機嫌値 0-100 (0=最悪, 50=普通, 100=最高),
+  "gained_items": ["新たに手に入れたグッズ名"],
+  "lost_items": ["手放したグッズ名"],
+  "updated_items": [{"name": "既存グッズ名", "state": "変化した状態(例: 付箋が増えた 等)"}]
+}
+
+【注意事項】
+- messageは必ずキャラクターとして自然に話しかけてください。（数言程度）
+- 現在所持しているグッズの中で、自立的に使用・消費したものがあれば \`updated_items\` で \`state\`（状態）を更新してください。これがないと部屋の時間が止まっているように見えます。`;
 
     return ctx;
 }
 
-/** 機嫌・グッズを更新 */
+/** 機嫌・グッズを更新しUIに反映 */
 function applyRoomResponse(char, parsed) {
     char.roomState.mood = parsed.mood;
     char.roomState.moodValue = parsed.moodValue;
+    
     // グッズ追加
     parsed.gainedItems.forEach(name => {
         if (name && !char.roomState.items.find(i => i.name === name)) {
-            char.roomState.items.push({ name, acquiredAt: new Date().toISOString() });
+            char.roomState.items.push({ name, state: '', gifted: false, acquiredAt: new Date().toISOString() });
+            char.roomLogs.push({ role: 'system', text: `【グッズ取得】 ${name}`, timestamp: new Date().toISOString() });
             roomLog('グッズ追加:', name);
         }
     });
+
+    // グッズ状態更新
+    parsed.updatedItems.forEach(upd => {
+        if (!upd.name) return;
+        const item = char.roomState.items.find(i => i.name === upd.name);
+        if (item && upd.state && item.state !== upd.state) {
+            item.state = upd.state;
+            char.roomLogs.push({ role: 'system', text: `【グッズ状態変化】 ${item.name} → ${item.state}`, timestamp: new Date().toISOString() });
+            roomLog('グッズ状態更新:', item.name, '->', item.state);
+        }
+    });
+
     // グッズ削除
     parsed.lostItems.forEach(name => {
         const idx = char.roomState.items.findIndex(i => i.name === name);
         if (idx >= 0) {
             char.roomState.items.splice(idx, 1);
+            char.roomLogs.push({ role: 'system', text: `【グッズ喪失】 ${name}`, timestamp: new Date().toISOString() });
             roomLog('グッズ削除:', name);
         }
     });
+
+    // currentActivity / monologue のDOM更新
+    const actElem = document.getElementById('room-current-activity');
+    const monoElem = document.getElementById('room-monologue');
+    if (actElem) actElem.textContent = parsed.currentActivity || '';
+    if (monoElem) monoElem.textContent = parsed.monologue ? `「${parsed.monologue}」` : '';
+    
+    // アニメーションのリトリガー
+    if (actElem) {
+        actElem.style.animation = 'none';
+        actElem.offsetHeight; // reflow
+        actElem.style.animation = 'roomFadeIn 0.6s ease';
+    }
+    if (monoElem) {
+        monoElem.style.animation = 'none';
+        monoElem.offsetHeight; // reflow
+        monoElem.style.animation = 'roomFadeIn 0.8s ease';
+    }
+
     saveData();
-    updateRoomVisuals(char);
+    updateRoomVisuals(char); // ここは非同期だがFire&ForgetでOK
 }
 
 // --- 日記生成 ---
@@ -1591,16 +1838,17 @@ async function generateDiary(char) {
 // --- スケジュール生成 ---
 async function generateSchedule(char) {
     roomLog('スケジュール生成開始');
-    const prompt = (char.prompt || '') + `\n\n【指示】あなたは今日一日のスケジュールを決めます。あなたの性格や好みに合った、自然で現実的なスケジュールを決めてください。
+    const prompt = (char.prompt || '') + `\n\n【指示】あなたは今日一日のスケジュールを決めます。あなたの性格や季節、天気に合わせて、自然で現実的なスケジュールを決めてください。
+起床や就寝の時間は日ごとに柔軟に変えて構いません（例: 休日は少し遅めなど）。お風呂の時間(\`bath_time\`)も必ず設定してください。
 必ず以下のJSON形式のみで返答してください:
-{"wake_up": "7:00", "morning": "活動内容", "noon": "活動内容", "evening": "活動内容", "night": "活動内容", "late_night": "活動内容", "bed_time": "23:00"}`;
+{"wake_up": "時間(例: 7:30)", "morning": "活動内容", "noon": "活動内容", "evening": "活動内容", "night": "活動内容", "bath_time": "時間(例: 21:00-21:30)", "late_night": "活動内容", "bed_time": "時間(例: 23:30)"}`;
     const userMsg = `今日の日付: ${new Date().toLocaleDateString('ja-JP')}、天気: ${char.roomState.weatherCache?.weather || 'sunny'}`;
     try {
         const raw = await callRoomAPI(prompt, userMsg);
         let schedule;
         try {
             schedule = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
-        } catch { schedule = { wake_up: '7:00', morning: '自由時間', noon: '昼食', evening: '散歩', night: 'リラックス', late_night: '就寝準備', bed_time: '23:00' }; }
+        } catch { schedule = { wake_up: '7:30', morning: '自由時間', noon: '昼食', evening: '自由時間', night: 'リラックス', bath_time: '21:00-21:30', late_night: '就寝準備', bed_time: '23:30' }; }
         char.roomState.schedule = schedule;
         char.roomState.scheduleDate = new Date().toISOString().slice(0, 10);
         saveData();
@@ -1626,8 +1874,15 @@ async function enterRoom(charId) {
     document.getElementById('room-reply-input').value = '';
     document.getElementById('room-reply-input').disabled = true;
     document.getElementById('btn-room-send').disabled = true;
+    
+    // UI側の現在行動をいったん隠す
+    const actElem = document.getElementById('room-current-activity');
+    const monoElem = document.getElementById('room-monologue');
+    if (actElem) actElem.textContent = '';
+    if (monoElem) monoElem.textContent = '';
+    
     showView('room');
-    updateRoomVisuals(char);
+    await updateRoomVisuals(char);
 
     try {
         // 天気取得
@@ -1640,6 +1895,8 @@ async function enterRoom(charId) {
                 await generateDiary(char);
             }
             await generateSchedule(char);
+            // スケジュール変更に伴うお風呂判定などのため再更新
+            await updateRoomVisuals(char);
         }
 
         // アクセス記録
@@ -1650,7 +1907,7 @@ async function enterRoom(charId) {
         char.roomState.lastAccessTime = new Date().toISOString();
         saveData();
 
-        updateRoomVisuals(char);
+        await updateRoomVisuals(char);
 
         // 挨拶生成
         const systemPrompt = await buildRoomContext(char);
@@ -1741,8 +1998,8 @@ async function handleRoomGift() {
     const char = AppState.characters.find(c => c.id === AppState.activeCharId);
     if (!char) return;
     ensureRoomData(char);
-    char.roomState.items.push({ name, acquiredAt: new Date().toISOString() });
-    char.roomLogs.push({ role: 'user', text: `【グッズを贈呈: ${name}】`, timestamp: new Date().toISOString() });
+    char.roomState.items.push({ name, state: '', gifted: true, acquiredAt: new Date().toISOString() });
+    char.roomLogs.push({ role: 'system', text: `【グッズを贈呈: ${name}】`, timestamp: new Date().toISOString() });
     if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
     saveData();
     input.value = '';
@@ -1829,18 +2086,20 @@ function renderRoomSchedule() {
         { time: '', label: s.noon || '-', prefix: '昼' },
         { time: '', label: s.evening || '-', prefix: '夕方' },
         { time: '', label: s.night || '-', prefix: '夜' },
+        { time: s.bath_time || '-', label: 'お風呂', prefix: '入浴' },
         { time: '', label: s.late_night || '-', prefix: '深夜' },
         { time: s.bed_time || '-', label: '就寝' }
-    ];
+    ].filter(item => item.time !== '-' && item.label !== '-');
+    
     items.forEach(item => {
         const row = document.createElement('div');
         row.className = 'room-schedule-item';
         const timeSpan = document.createElement('span');
         timeSpan.className = 'room-schedule-time';
-        timeSpan.textContent = item.prefix ? item.prefix : item.time;
+        timeSpan.textContent = item.prefix ? (item.time ? `${item.prefix} (${item.time})` : item.prefix) : item.time;
         const actSpan = document.createElement('span');
         actSpan.className = 'room-schedule-activity';
-        actSpan.textContent = item.prefix ? item.label : item.label;
+        actSpan.textContent = item.label;
         row.appendChild(timeSpan);
         row.appendChild(actSpan);
         div.appendChild(row);
@@ -1860,7 +2119,24 @@ function renderRoomItems() {
     char.roomState.items.forEach(item => {
         const entry = document.createElement('div');
         entry.className = 'room-item-entry';
-        entry.innerHTML = `<span class="room-item-name">${escapeHtml(item.name)}</span><span class="room-item-date">${formatDate(item.acquiredAt)}</span>`;
+        
+        let nameHtml = `<span class="room-item-name">${escapeHtml(item.name)}</span>`;
+        if (item.gifted) {
+            nameHtml += `<span class="room-item-gifted-badge">🎁 Present</span>`;
+        }
+        
+        let stateHtml = '';
+        if (item.state) {
+            stateHtml = `<div class="room-item-state">状態: ${escapeHtml(item.state)}</div>`;
+        }
+
+        entry.innerHTML = `
+            <div>
+                ${nameHtml}
+                ${stateHtml}
+            </div>
+            <span class="room-item-date">${formatDate(item.acquiredAt)}</span>
+        `;
         div.appendChild(entry);
     });
 }
@@ -1885,53 +2161,171 @@ function renderRoomLogs() {
     });
 }
 
-// --- Room設定の読込・保存 ---
+// --- Room設定の読込・保存・Cropperイベント ---
+let currentCropKey = null;
+let cropperInstance = null;
+
 function loadRoomSettingsForm() {
     const char = AppState.characters.find(c => c.id === AppState.activeCharId);
     if (!char) return;
     ensureRoomData(char);
-    const rs = char.roomSettings;
-    document.getElementById('room-img-bg-morning').value = rs.bgMorning || '';
-    document.getElementById('room-img-bg-evening').value = rs.bgEvening || '';
-    document.getElementById('room-img-bg-night').value = rs.bgNight || '';
-    document.getElementById('room-img-weather-sunny').value = rs.weatherSunny || '';
-    document.getElementById('room-img-weather-cloudy').value = rs.weatherCloudy || '';
-    document.getElementById('room-img-weather-rainy').value = rs.weatherRainy || '';
-    document.getElementById('room-img-weather-snowy').value = rs.weatherSnowy || '';
-    document.getElementById('room-img-char-normal').value = rs.charNormal || '';
-    document.getElementById('room-img-char-happy').value = rs.charHappy || '';
-    document.getElementById('room-img-char-angry').value = rs.charAngry || '';
-    document.getElementById('room-img-char-sad').value = rs.charSad || '';
-    document.getElementById('room-img-char-sleepy').value = rs.charSleepy || '';
+
+    // IndexedDBからプレビューを非同期で読み込む
+    const loadPreview = async (key, elementId) => {
+        const url = await loadImageFromDB(`${char.id}_${key}`);
+        const preview = document.getElementById(elementId);
+        const slot = preview.parentElement;
+        if (url) {
+            preview.style.backgroundImage = `url('${url}')`;
+            slot.classList.add('has-image');
+            slot.querySelector('.room-img-delete-btn').style.display = 'flex';
+        } else {
+            preview.style.backgroundImage = '';
+            slot.classList.remove('has-image');
+            slot.querySelector('.room-img-delete-btn').style.display = 'none';
+        }
+    };
+
+    const keys = ['bgMorning', 'bgEvening', 'bgNight', 'weatherSunny', 'weatherCloudy', 'weatherRainy', 'weatherSnowy', 'charNormal', 'charHappy', 'charAngry', 'charSad', 'charSleepy'];
+    keys.forEach(k => loadPreview(k, `preview-${k}`));
 }
 
 function saveRoomSettingsForm() {
     const char = AppState.characters.find(c => c.id === AppState.activeCharId);
     if (!char) return;
-    ensureRoomData(char);
-    char.roomSettings.bgMorning = document.getElementById('room-img-bg-morning').value.trim();
-    char.roomSettings.bgEvening = document.getElementById('room-img-bg-evening').value.trim();
-    char.roomSettings.bgNight = document.getElementById('room-img-bg-night').value.trim();
-    char.roomSettings.weatherSunny = document.getElementById('room-img-weather-sunny').value.trim();
-    char.roomSettings.weatherCloudy = document.getElementById('room-img-weather-cloudy').value.trim();
-    char.roomSettings.weatherRainy = document.getElementById('room-img-weather-rainy').value.trim();
-    char.roomSettings.weatherSnowy = document.getElementById('room-img-weather-snowy').value.trim();
-    char.roomSettings.charNormal = document.getElementById('room-img-char-normal').value.trim();
-    char.roomSettings.charHappy = document.getElementById('room-img-char-happy').value.trim();
-    char.roomSettings.charAngry = document.getElementById('room-img-char-angry').value.trim();
-    char.roomSettings.charSad = document.getElementById('room-img-char-sad').value.trim();
-    char.roomSettings.charSleepy = document.getElementById('room-img-char-sleepy').value.trim();
-    saveData();
-    updateRoomVisuals(char);
+    // (画像はトリミング確定時にDBに即座に保存されるため、ここでは画面を閉じて更新するのみ)
     showView('room');
-    roomLog('Room設定保存完了');
+    updateRoomVisuals(char); 
+    roomLog('Room設定モーダルを閉じました');
+}
+
+function setupRoomSettingsEvents() {
+    const slots = document.querySelectorAll('.room-img-slot');
+    const modal = document.getElementById('cropper-modal');
+    const imgElem = document.getElementById('cropper-image');
+    let currentAspect = 1;
+
+    slots.forEach(slot => {
+        const fileInput = slot.querySelector('.room-img-file-input');
+        const delBtn = slot.querySelector('.room-img-delete-btn');
+        const key = slot.getAttribute('data-key');
+
+        slot.addEventListener('click', (e) => {
+            if (e.target === delBtn || e.target === fileInput) return;
+            fileInput.value = ''; // クリック時にリセットすることで複数回同じファイルを選択可能にする
+            fileInput.click();
+        });
+
+        // バブリング防止（input本体がクリックされた場合）
+        fileInput.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (!e.target.files || e.target.files.length === 0) return;
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                currentCropKey = key;
+                currentAspect = parseFloat(slot.getAttribute('data-aspect')) || 1;
+                imgElem.src = re.target.result;
+                modal.style.display = 'flex';
+                
+                if (cropperInstance) cropperInstance.destroy();
+                setTimeout(() => {
+                    if (typeof Cropper !== 'undefined') {
+                        cropperInstance = new Cropper(imgElem, {
+                            aspectRatio: currentAspect,
+                            viewMode: 1,
+                            autoCropArea: 1,
+                            background: false
+                        });
+                    } else {
+                        alert('Cropper.jsが読み込まれていません。ネットワーク状況を確認してください。');
+                        modal.style.display = 'none';
+                    }
+                }, 100);
+            };
+            reader.onerror = () => {
+                alert('画像の読み込みに失敗しました。');
+            };
+            reader.readAsDataURL(file);
+            // ※ここで e.target.value = '' を実行すると、Chrome等でファイルの読み込みが中止されるため削除
+        });
+
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if(!confirm('本当にこの画像を削除しますか？')) return;
+            const charId = AppState.activeCharId;
+            await deleteImageFromDB(`${charId}_${key}`);
+            const preview = document.getElementById(`preview-${key}`);
+            preview.style.backgroundImage = '';
+            slot.classList.remove('has-image');
+            delBtn.style.display = 'none';
+            roomLog('画像削除完了:', key);
+        });
+    });
+
+    document.getElementById('btn-cancel-crop').addEventListener('click', () => {
+        modal.style.display = 'none';
+        if (cropperInstance) cropperInstance.destroy();
+        cropperInstance = null;
+        currentCropKey = null;
+    });
+
+    document.getElementById('btn-confirm-crop').addEventListener('click', async () => {
+        if (!cropperInstance || !currentCropKey) return;
+        const canvas = cropperInstance.getCroppedCanvas();
+        if (!canvas) {
+            alert('画像のトリミングに失敗しました。');
+            return;
+        }
+
+        try {
+            // 透過維持のため PNG 形式の Base64(DataURL) を生成
+//            const base64Str = canvas.toDataURL('image/png');
+//            const res = await fetch(base64Str);
+//            const blob = await res.blob();
+
+				const blob = await new Promise(resolve => 
+				    canvas.toBlob(resolve, 'image/png')
+				);
+				if (!blob) {
+				    alert('画像のトリミングに失敗しました。');
+				    return;
+				}
+            
+            const charId = AppState.activeCharId;
+            await saveImageToDB(`${charId}_${currentCropKey}`, blob);
+
+            // プレビューに反映
+            const preview = document.getElementById(`preview-${currentCropKey}`);
+            const slot = preview.parentElement;
+            
+            // 以前のObjectURLがあれば破棄するべきだが、ここは簡易的に上書き
+            const url = URL.createObjectURL(blob);
+            preview.style.backgroundImage = `url('${url}')`;
+            slot.classList.add('has-image');
+            slot.querySelector('.room-img-delete-btn').style.display = 'flex';
+
+            modal.style.display = 'none';
+            cropperInstance.destroy();
+            cropperInstance = null;
+            
+            roomLog('画像トリミング・DB保存完了:', currentCropKey);
+        } catch(e) {
+            roomLog('画像保存エラー:', e.message);
+            alert('画像の保存に失敗しました。');
+        }
+    });
 }
 
 // ============================================================
 // 11. INITIALIZATION
 // ============================================================
-function init() {
-    loadData();
+async function init() {
+    await requestPersistentStorage();
+    await loadData();
     renderCharacters();
     setupEventListeners();
     showView('main');
