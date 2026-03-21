@@ -775,6 +775,63 @@ function setupEventListeners() {
         showView('charSettings');
     };
 
+    // --- Global Settings ---
+    document.getElementById('api-key-input').value = AppState.apiKey;
+    
+    const setupModelUI = (stateValue, prefix) => {
+        const select = document.getElementById(`${prefix}select`);
+        const input = document.getElementById(`${prefix}input`);
+        const radios = document.getElementsByName(`${prefix}Type`);
+        let found = false;
+        if (select) {
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === stateValue) {
+                    select.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (found) {
+            if (radios[0]) radios[0].checked = true;
+            if (input) input.value = '';
+        } else {
+            if (radios[1]) radios[1].checked = true;
+            if (input) input.value = stateValue || '';
+        }
+        const updateUI = () => {
+            const radioSel = document.querySelector(`input[name="${prefix}Type"]:checked`);
+            if (!radioSel) return;
+            const isSelect = radioSel.value === 'select';
+            if (select) select.disabled = !isSelect;
+            if (input) {
+                input.disabled = isSelect;
+                if (!isSelect) input.focus();
+            }
+        };
+        radios.forEach(r => r.addEventListener('change', updateUI));
+        updateUI();
+    };
+    setupModelUI(AppState.model, 'model-');
+    setupModelUI(AppState.roomModel, 'room-model-');
+
+    document.getElementById('btn-save-global').onclick = () => {
+        AppState.apiKey = document.getElementById('api-key-input').value.trim();
+        const getModelVal = (prefix) => {
+            const radioSel = document.querySelector(`input[name="${prefix}Type"]:checked`);
+            if (!radioSel) return '';
+            const isSelect = radioSel.value === 'select';
+            return isSelect ? document.getElementById(`${prefix}select`).value : document.getElementById(`${prefix}input`).value.trim();
+        };
+        const mVal = getModelVal('model-');
+        if (mVal) AppState.model = mVal;
+        const rVal = getModelVal('room-model-');
+        if (rVal) AppState.roomModel = rVal;
+        
+        saveData();
+        showView('main');
+    };
+
     // --- Character Save ---
     document.getElementById('btn-save-char').onclick = () => {
         const name = document.getElementById('char-name-input').value.trim();
@@ -921,35 +978,8 @@ function setupEventListeners() {
     // Enterキーは改行のみ（送信は送信ボタンのみ）
 
     // --- Global Settings ---
-    document.getElementById('api-key-input').value = AppState.apiKey;
-    const radios = document.getElementsByName('model');
-    for (let i = 0; i < radios.length; i++) {
-        radios[i].checked = (radios[i].value === AppState.model);
-    }
-    const roomModelRadios = document.getElementsByName('roomModel');
-    for (let i = 0; i < roomModelRadios.length; i++) {
-        roomModelRadios[i].checked = (roomModelRadios[i].value === AppState.roomModel);
-    }
+    // (Moved to correct position inside setupEventListeners)
 
-    document.getElementById('btn-save-global').onclick = () => {
-        AppState.apiKey = document.getElementById('api-key-input').value.trim();
-        const radios = document.getElementsByName('model');
-        for (let i = 0; i < radios.length; i++) {
-            if (radios[i].checked) {
-                AppState.model = radios[i].value;
-                break;
-            }
-        }
-        const roomRadios = document.getElementsByName('roomModel');
-        for (let i = 0; i < roomRadios.length; i++) {
-            if (roomRadios[i].checked) {
-                AppState.roomModel = roomRadios[i].value;
-                break;
-            }
-        }
-        saveData();
-        showView('main');
-    };
 
     // --- Export ---
     document.getElementById('btn-export-chat').onclick = exportCurrentThread;
@@ -1373,7 +1403,7 @@ function ensureRoomData(char) {
     if (!char.roomSettings) {
         char.roomSettings = {
             bgMorning: '', bgEvening: '', bgNight: '',
-            charNormal: '', charHappy: '', charAngry: '', charSad: '', charSleepy: ''
+            charNormal: '', charHappy: '', charAngry: '', charSad: '', charSleepy: '', charShy: '', charTroubled: ''
         };
     }
     if (!char.roomState) {
@@ -1392,11 +1422,13 @@ function ensureRoomData(char) {
 /** 機嫌のアイコンとテキストを返す */
 function getMoodDisplay(mood, moodValue) {
     const moods = {
-        happy:  { icon: '😄', text: 'ハッピー' },
-        angry:  { icon: '😠', text: 'イライラ' },
-        sad:    { icon: '😢', text: '悲しみ' },
-        sleepy: { icon: '😴', text: '眠い' },
-        normal: { icon: '😊', text: '普通' }
+        happy:    { icon: '😄', text: 'ハッピー' },
+        angry:    { icon: '😠', text: 'イライラ' },
+        sad:      { icon: '😢', text: '悲しみ' },
+        sleepy:   { icon: '😴', text: '眠い' },
+        shy:      { icon: '😳', text: '照れ' },
+        troubled: { icon: '😰', text: '困り' },
+        normal:   { icon: '😊', text: '普通' }
     };
     const m = moods[mood] || moods.normal;
     if (moodValue >= 80) m.text += ' ♪';
@@ -1477,7 +1509,10 @@ async function updateRoomVisuals(char) {
     const bgKeyMap = { morning: 'bgMorning', evening: 'bgEvening', night: 'bgNight' };
     const bgKey = bgKeyMap[tod];
     if (bgKey) {
-        const hasImg = await loadImg('bg', bgKey, bgLayer);
+        let hasImg = await loadImg('bg', bgKey, bgLayer);
+        if (!hasImg && bgKey !== 'bgMorning') {
+             hasImg = await loadImg('bg', 'bgMorning', bgLayer);
+        }
         bgLayer.className = hasImg ? 'room-layer' : 'room-layer room-bg-default';
     } else {
         if (roomBlobUrls.bg) URL.revokeObjectURL(roomBlobUrls.bg);
@@ -1507,7 +1542,7 @@ async function updateRoomVisuals(char) {
 
     // キャラクター
     const mood = state.mood || 'normal';
-    const charKeyMap = { normal: 'charNormal', happy: 'charHappy', angry: 'charAngry', sad: 'charSad', sleepy: 'charSleepy' };
+    const charKeyMap = { normal: 'charNormal', happy: 'charHappy', angry: 'charAngry', sad: 'charSad', sleepy: 'charSleepy', shy: 'charShy', troubled: 'charTroubled' };
     const cKey = charKeyMap[mood];
     
     if (isBath) {
@@ -1515,7 +1550,15 @@ async function updateRoomVisuals(char) {
         roomBlobUrls.char = null;
         charLayer.style.backgroundImage = '';
     } else if (cKey) {
-        await loadImg('char', cKey, charLayer);
+        let hasChar = await loadImg('char', cKey, charLayer);
+        if (!hasChar && cKey !== 'charNormal') {
+            hasChar = await loadImg('char', 'charNormal', charLayer);
+        }
+        if (!hasChar) {
+            if (roomBlobUrls.char) URL.revokeObjectURL(roomBlobUrls.char);
+            roomBlobUrls.char = null;
+            charLayer.style.backgroundImage = '';
+        }
     } else {
         if (roomBlobUrls.char) URL.revokeObjectURL(roomBlobUrls.char);
         roomBlobUrls.char = null;
@@ -1745,7 +1788,7 @@ async function buildRoomContext(char) {
   "message": "ユーザへの発言テキスト（お風呂中の場合はお風呂の中から返答すること）",
   "current_activity": "あなたが【今この瞬間】何をしているかの具体的な状況描写(例: 本のページをめくっている、お風呂で鼻歌をうたっている 等)",
   "monologue": "今のあなたの心の中の独り言",
-  "mood": "normal/happy/angry/sad/sleepy のいずれか",
+  "mood": "normal/happy/angry/sad/sleepy/shy/troubled のいずれか",
   "mood_value": 機嫌値 0-100 (0=最悪, 50=普通, 100=最高),
   "gained_items": ["新たに手に入れたグッズ名"],
   "lost_items": ["手放したグッズ名"],
@@ -1754,7 +1797,8 @@ async function buildRoomContext(char) {
 
 【注意事項】
 - messageは必ずキャラクターとして自然に話しかけてください。（数言程度）
-- 現在所持しているグッズの中で、自立的に使用・消費したものがあれば \`updated_items\` で \`state\`（状態）を更新してください。これがないと部屋の時間が止まっているように見えます。`;
+- 現在所持しているグッズの中で、自立的に使用・消費したものがあれば \`updated_items\` で \`state\`（状態）を更新してください。これがないと部屋の時間が止まっているように見えます。
+- ユーザの不在時に自力で入手したグッズがあれば、  \`gained_items\` に追加し、それについて会話で触れて下さい。`;
 
     return ctx;
 }
@@ -1843,7 +1887,7 @@ async function generateDiary(char) {
 async function generateSchedule(char) {
     roomLog('スケジュール生成開始');
     const prompt = (char.prompt || '') + `\n\n【指示】あなたは今日一日のスケジュールを決めます。あなたの性格や季節、天気に合わせて、自然で現実的なスケジュールを決めてください。
-起床や就寝の時間は日ごとに柔軟に変えて構いません（例: 休日は少し遅めなど）。お風呂の時間(\`bath_time\`)も必ず設定してください。
+起床や就寝の時間は日ごとに柔軟に変えて構いません（例: 休日は少し遅めなど）。お風呂の時間(\`bath_time\`)も設定してください(風呂に入らない場合は入らない旨を明記してください)
 必ず以下のJSON形式のみで返答してください:
 {"wake_up": "時間(例: 7:30)", "morning": "活動内容", "noon": "活動内容", "evening": "活動内容", "night": "活動内容", "bath_time": "時間(例: 21:00-21:30)", "late_night": "活動内容", "bed_time": "時間(例: 23:30)"}`;
     const userMsg = `今日の日付: ${new Date().toLocaleDateString('ja-JP')}、天気: ${char.roomState.weatherCache?.weather || 'sunny'}`;
@@ -1989,7 +2033,7 @@ async function handleRoomReply() {
     } finally {
         input.disabled = false;
         document.getElementById('btn-room-send').disabled = false;
-        input.focus();
+        // input.focus(); // Prevent auto-keypad showing
         isRoomBusy = false;
     }
 }
@@ -2163,6 +2207,15 @@ function renderRoomLogs() {
         entry.innerHTML = `<div class="room-log-role ${roleClass}">${escapeHtml(roleName)} (${formatDate(log.timestamp)})</div><div class="room-entry-content">${escapeHtml(log.text)}</div>`;
         div.appendChild(entry);
     });
+
+    // Auto-scroll to bottom of the modal content area
+    const contentArea = div.closest('.content-area');
+    if (contentArea) {
+        // Use setTimeout to ensure DOM updates before scrolling
+        setTimeout(() => {
+            contentArea.scrollTop = contentArea.scrollHeight;
+        }, 10);
+    }
 }
 
 // --- Room設定の読込・保存・Cropperイベント ---

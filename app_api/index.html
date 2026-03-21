@@ -205,51 +205,39 @@
                 <p class="help-text">キーはブラウザ内にのみ保存されます。</p>
 
                 <label>会話用モデル（※無料枠あり）</label>
-                <div class="radio-group">
+                <div class="radio-group" style="padding-bottom:16px;">
                     <label>
-                        <input type="radio" name="model" value="gemini-3.1-flash-lite-preview" checked>
-                        Gemini 3.1 Flash Lite Preview (デフォルト)
+                        <input type="radio" name="modelType" value="select" checked> リストから選択
                     </label>
-                    <label>
-                        <input type="radio" name="model" value="gemini-3-flash-preview">
-                        Gemini 3 Flash Preview
+                    <select id="model-select" style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="modelType" value="custom"> 自由入力
                     </label>
-                    <label>
-                        <input type="radio" name="model" value="gemini-2.5-pro">
-                        Gemini 2.5 Pro
-                    </label>
-                    <label>
-                        <input type="radio" name="model" value="gemini-2.5-flash">
-                        Gemini 2.5 Flash
-                    </label>
-                    <label>
-                        <input type="radio" name="model" value="gemini-2.5-flash-lite">
-                        Gemini 2.5 Flash Lite
-                    </label>
+                    <input type="text" id="model-input" placeholder="モデル名を入力..." style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;" disabled>
                 </div>
 
                 <label>room用モデル</label>
-                <div class="radio-group">
+                <div class="radio-group" style="padding-bottom:16px;">
                     <label>
-                        <input type="radio" name="roomModel" value="gemini-3.1-flash-lite-preview" checked>
-                        Gemini 3.1 Flash Lite Preview (デフォルト)
+                        <input type="radio" name="roomModelType" value="select" checked> リストから選択
                     </label>
-                    <label>
-                        <input type="radio" name="roomModel" value="gemini-3-flash-preview">
-                        Gemini 3 Flash Preview
+                    <select id="room-model-select" style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="roomModelType" value="custom"> 自由入力
                     </label>
-                    <label>
-                        <input type="radio" name="roomModel" value="gemini-2.5-pro">
-                        Gemini 2.5 Pro
-                    </label>
-                    <label>
-                        <input type="radio" name="roomModel" value="gemini-2.5-flash">
-                        Gemini 2.5 Flash
-                    </label>
-                    <label>
-                        <input type="radio" name="roomModel" value="gemini-2.5-flash-lite">
-                        Gemini 2.5 Flash Lite
-                    </label>
+                    <input type="text" id="room-model-input" placeholder="モデル名を入力..." style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;" disabled>
                 </div>
 
                 <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
@@ -440,6 +428,18 @@
                     <div class="room-img-slot" data-key="charSleepy" data-aspect="0.75" data-label="眠い">
                         <div class="room-img-preview" id="preview-charSleepy"></div>
                         <span class="room-img-label">😴 眠い</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charShy" data-aspect="0.75" data-label="照れ">
+                        <div class="room-img-preview" id="preview-charShy"></div>
+                        <span class="room-img-label">😳 照れ</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                    <div class="room-img-slot" data-key="charTroubled" data-aspect="0.75" data-label="困り">
+                        <div class="room-img-preview" id="preview-charTroubled"></div>
+                        <span class="room-img-label">😰 困り</span>
                         <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
                         <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
                     </div>
