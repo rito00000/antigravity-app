@@ -405,6 +405,19 @@ function showView(viewName) {
     }
     Object.values(views).forEach(v => v.classList.remove('active'));
     views[viewName].classList.add('active');
+
+    // Background control for thread and chat views
+    if (viewName === 'thread' || viewName === 'chat') {
+        setTimeout(() => {
+            if (typeof updateGlobalBackground === 'function') {
+                updateGlobalBackground(AppState.activeCharId);
+            }
+        }, 0);
+    } else {
+        if (typeof updateGlobalBackground === 'function') {
+            updateGlobalBackground(null);
+        }
+    }
 }
 
 // ============================================================
@@ -1466,6 +1479,7 @@ function isInBathTime(schedule) {
 
 // ObjectURLのキャッシュ（メモリリーク防止用）
 const roomBlobUrls = { bg: null, weather: null, char: null };
+const globalBlobUrls = { bg: null, char: null };
 
 /** Room画面のビジュアルを更新（背景・天気・キャラ画像・機嫌） */
 async function updateRoomVisuals(char) {
@@ -1569,6 +1583,86 @@ async function updateRoomVisuals(char) {
     const md = getMoodDisplay(mood, state.moodValue);
     document.getElementById('room-mood-icon').textContent = md.icon;
     document.getElementById('room-mood-text').textContent = md.text;
+}
+
+/** スレッド・チャット画面のグローバル背景を更新 */
+async function updateGlobalBackground(charId) {
+    const bgLayer = document.getElementById('global-bg-layer');
+    const charLayer = document.getElementById('global-char-layer');
+    const overlay = document.getElementById('global-overlay-layer');
+    if (!bgLayer || !charLayer || !overlay) return;
+
+    if (!charId) {
+        bgLayer.style.display = 'none';
+        charLayer.style.display = 'none';
+        overlay.style.display = 'none';
+        if (globalBlobUrls.bg) URL.revokeObjectURL(globalBlobUrls.bg);
+        if (globalBlobUrls.char) URL.revokeObjectURL(globalBlobUrls.char);
+        globalBlobUrls.bg = null;
+        globalBlobUrls.char = null;
+        bgLayer.style.backgroundImage = '';
+        charLayer.style.backgroundImage = '';
+        return;
+    }
+
+    const char = AppState.characters.find(c => c.id === charId);
+    if (!char) return;
+
+    ensureRoomData(char);
+    const state = char.roomState;
+    const isBath = isInBathTime(state.schedule);
+
+    // 画像ロード補助関数
+    const loadImg = async (type, key, element) => {
+        if (globalBlobUrls[type]) URL.revokeObjectURL(globalBlobUrls[type]);
+        const url = await loadImageFromDB(`${char.id}_${key}`);
+        globalBlobUrls[type] = url;
+        if (url) {
+            element.style.backgroundImage = `url('${url}')`;
+            return true;
+        } else {
+            element.style.backgroundImage = '';
+            return false;
+        }
+    };
+
+    // 背景
+    const tod = getTimeOfDay();
+    const bgKeyMap = { morning: 'bgMorning', evening: 'bgEvening', night: 'bgNight' };
+    const bgKey = bgKeyMap[tod];
+    if (bgKey) {
+        let hasImg = await loadImg('bg', bgKey, bgLayer);
+        if (!hasImg && bgKey !== 'bgMorning') hasImg = await loadImg('bg', 'bgMorning', bgLayer);
+        bgLayer.className = hasImg ? 'room-layer' : 'room-layer room-bg-default';
+    } else {
+        if (globalBlobUrls.bg) URL.revokeObjectURL(globalBlobUrls.bg);
+        globalBlobUrls.bg = null;
+        bgLayer.className = 'room-layer room-bg-default';
+        bgLayer.style.backgroundImage = '';
+    }
+
+    // キャラクター
+    const mood = state.mood || 'normal';
+    const charKeyMap = { normal: 'charNormal', happy: 'charHappy', angry: 'charAngry', sad: 'charSad', sleepy: 'charSleepy', shy: 'charShy', troubled: 'charTroubled' };
+    const cKey = charKeyMap[mood];
+    
+    if (isBath) {
+        if (globalBlobUrls.char) URL.revokeObjectURL(globalBlobUrls.char);
+        globalBlobUrls.char = null;
+        charLayer.style.backgroundImage = '';
+    } else if (cKey) {
+        let hasChar = await loadImg('char', cKey, charLayer);
+        if (!hasChar && cKey !== 'charNormal') hasChar = await loadImg('char', 'charNormal', charLayer);
+        if (!hasChar) {
+            if (globalBlobUrls.char) URL.revokeObjectURL(globalBlobUrls.char);
+            globalBlobUrls.char = null;
+            charLayer.style.backgroundImage = '';
+        }
+    }
+
+    bgLayer.style.display = 'block';
+    charLayer.style.display = 'block';
+    overlay.style.display = 'block';
 }
 
 // --- 天気取得 ---

@@ -28,8 +28,13 @@
     <!-- ===== アプリ全体ラッパー ===== -->
     <div id="app-container">
 
+        <!-- ===== グローバル背景レイヤー (スレッド/チャット画面用) ===== -->
+        <div id="global-bg-layer" class="room-layer room-bg-default" style="display:none; transition: opacity 0.5s;"></div>
+        <div id="global-char-layer" class="room-layer" style="display:none; transition: opacity 0.5s;"></div>
+        <div id="global-overlay-layer" class="room-layer" style="display:none; background: rgba(0,0,0,0.65); z-index: 0; pointer-events: none; transition: opacity 0.5s;"></div>
+
         <!-- ===== メイン画面（キャラ一覧＆スレッド一覧） ===== -->
-        <div id="main-view" class="view active">
+        <div id="main-view" class="view active" style="z-index: 1;">
             <header class="app-header">
                 <div class="header-left">
                     <h1 id="header-title">キャラクター一覧</h1>

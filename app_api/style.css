@@ -69,6 +69,10 @@ body {
     z-index: 20;
 }
 
+#thread-view, #chat-view {
+    background-color: transparent !important;
+}
+
 /* Headers */
 .app-header {
     height: 52px;
@@ -224,6 +228,9 @@ button {
     align-items: center;
     gap: 8px;
     transition: background-color 0.15s ease;
+    background-color: rgba(30, 30, 30, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
 
 .list-item-content {
@@ -305,7 +312,9 @@ button {
 
 .msg-user {
     align-self: flex-end;
-    background-color: var(--user-msg-bg);
+    background-color: rgba(45, 31, 94, 0.85); /* var(--user-msg-bg) is #2d1f5e */
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     border-bottom-right-radius: 4px;
     max-width: 80%;
     margin-left: 20%;
@@ -313,11 +322,13 @@ button {
 
 .msg-ai {
     align-self: flex-start;
-    background-color: var(--ai-msg-bg);
+    background-color: rgba(26, 26, 26, 0.85); /* var(--ai-msg-bg) is #1a1a1a */
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     border-bottom-left-radius: 4px;
     max-width: 92%;
     margin-right: 2%;
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(255, 255, 255, 0.05); /* slightly lighter border to match transparency */
 }
 
 .msg-text {
@@ -338,7 +349,9 @@ button {
     display: flex;
     padding: 8px 12px;
     padding-bottom: calc(8px + var(--safe-bottom));
-    background-color: var(--surface-color);
+    background-color: rgba(30, 30, 30, 0.85); /* surface-color is #1e1e1e */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-top: 1px solid var(--border-color);
     align-items: flex-end;
     gap: 8px;
