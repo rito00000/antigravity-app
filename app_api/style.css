@@ -74,6 +74,10 @@ body {
     background-color: transparent !important;
 }
 
+#global-char-layer {
+    top: 100px;
+}
+
 /* Headers */
 .app-header {
     height: 52px;
