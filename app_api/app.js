@@ -778,10 +778,10 @@ function setupEventListeners() {
     // --- Global Settings ---
     document.getElementById('api-key-input').value = AppState.apiKey;
     
-    const setupModelUI = (stateValue, prefix) => {
+    const setupModelUI = (stateValue, prefix, radioName) => {
         const select = document.getElementById(`${prefix}select`);
         const input = document.getElementById(`${prefix}input`);
-        const radios = document.getElementsByName(`${prefix}Type`);
+        const radios = document.getElementsByName(radioName);
         let found = false;
         if (select) {
             for (let i = 0; i < select.options.length; i++) {
@@ -800,7 +800,7 @@ function setupEventListeners() {
             if (input) input.value = stateValue || '';
         }
         const updateUI = () => {
-            const radioSel = document.querySelector(`input[name="${prefix}Type"]:checked`);
+            const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
             if (!radioSel) return;
             const isSelect = radioSel.value === 'select';
             if (select) select.disabled = !isSelect;
@@ -812,20 +812,20 @@ function setupEventListeners() {
         radios.forEach(r => r.addEventListener('change', updateUI));
         updateUI();
     };
-    setupModelUI(AppState.model, 'model-');
-    setupModelUI(AppState.roomModel, 'room-model-');
+    setupModelUI(AppState.model, 'model-', 'modelType');
+    setupModelUI(AppState.roomModel, 'room-model-', 'roomModelType');
 
     document.getElementById('btn-save-global').onclick = () => {
         AppState.apiKey = document.getElementById('api-key-input').value.trim();
-        const getModelVal = (prefix) => {
-            const radioSel = document.querySelector(`input[name="${prefix}Type"]:checked`);
+        const getModelVal = (prefix, radioName) => {
+            const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
             if (!radioSel) return '';
             const isSelect = radioSel.value === 'select';
             return isSelect ? document.getElementById(`${prefix}select`).value : document.getElementById(`${prefix}input`).value.trim();
         };
-        const mVal = getModelVal('model-');
+        const mVal = getModelVal('model-', 'modelType');
         if (mVal) AppState.model = mVal;
-        const rVal = getModelVal('room-model-');
+        const rVal = getModelVal('room-model-', 'roomModelType');
         if (rVal) AppState.roomModel = rVal;
         
         saveData();
