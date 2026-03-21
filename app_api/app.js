@@ -1936,10 +1936,13 @@ async function enterRoom(charId) {
         // 天気取得
         await fetchWeather(char);
 
-        // 朝5時跨ぎチェック → 日記＆スケジュール生成
-        if (hasCrossed5am(char.roomState.lastAccessTime)) {
-            roomLog('朝5時を跨ぎました。日記とスケジュールを生成します。');
-            if (char.roomState.lastAccessTime) {
+        // 朝5時跨ぎチェック または スケジュール未設定チェック
+        const crossed5am = hasCrossed5am(char.roomState.lastAccessTime);
+        const needsSchedule = !char.roomState.schedule;
+
+        if (crossed5am || needsSchedule) {
+            roomLog(crossed5am ? '朝5時を跨ぎました。日次処理を実行します。' : 'スケジュールが未設定のため生成を実行します。');
+            if (char.roomState.lastAccessTime && crossed5am) {
                 await generateDiary(char);
             }
             await generateSchedule(char);
