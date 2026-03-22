@@ -29,9 +29,12 @@
     <div id="app-container">
 
         <!-- ===== グローバル背景レイヤー (スレッド/チャット画面用) ===== -->
-        <div id="global-bg-layer" class="room-layer room-bg-default" style="display:none; transition: opacity 0.5s;"></div>
+        <div id="global-bg-layer" class="room-layer room-bg-default" style="display:none; transition: opacity 0.5s;">
+        </div>
         <div id="global-char-layer" class="room-layer" style="display:none; transition: opacity 0.5s;"></div>
-        <div id="global-overlay-layer" class="room-layer" style="display:none; background: rgba(0,0,0,0.65); z-index: 0; pointer-events: none; transition: opacity 0.5s;"></div>
+        <div id="global-overlay-layer" class="room-layer"
+            style="display:none; background: rgba(0,0,0,0.65); z-index: 0; pointer-events: none; transition: opacity 0.5s;">
+        </div>
 
         <!-- ===== メイン画面（キャラ一覧＆スレッド一覧） ===== -->
         <div id="main-view" class="view active" style="z-index: 1;">
@@ -204,7 +207,7 @@
                 <button id="btn-close-global-settings" class="icon-btn">✖</button>
             </header>
             <div class="content-area padding-area">
-                <div class="version-badge">20260321 rev.1</div>
+                <div class="version-badge">20260322 rev.1</div>
                 <label for="api-key-input">Gemini APIキー</label>
                 <input type="password" id="api-key-input" placeholder="AIzaSy...">
                 <p class="help-text">キーはブラウザ内にのみ保存されます。</p>
@@ -214,7 +217,8 @@
                     <label>
                         <input type="radio" name="modelType" value="select" checked> リストから選択
                     </label>
-                    <select id="model-select" style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                    <select id="model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
                         <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
                         <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
                         <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -224,7 +228,9 @@
                     <label style="margin-top:10px;">
                         <input type="radio" name="modelType" value="custom"> 自由入力
                     </label>
-                    <input type="text" id="model-input" placeholder="モデル名を入力..." style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;" disabled>
+                    <input type="text" id="model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;"
+                        disabled>
                 </div>
 
                 <label>room用モデル</label>
@@ -232,7 +238,8 @@
                     <label>
                         <input type="radio" name="roomModelType" value="select" checked> リストから選択
                     </label>
-                    <select id="room-model-select" style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                    <select id="room-model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
                         <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
                         <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
                         <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -242,7 +249,9 @@
                     <label style="margin-top:10px;">
                         <input type="radio" name="roomModelType" value="custom"> 自由入力
                     </label>
-                    <input type="text" id="room-model-input" placeholder="モデル名を入力..." style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;" disabled>
+                    <input type="text" id="room-model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;"
+                        disabled>
                 </div>
 
                 <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">

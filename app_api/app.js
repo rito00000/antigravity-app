@@ -1821,8 +1821,16 @@ async function buildRoomContext(char) {
 
     // room会話ログ（直近30件）
     const recentLogs = char.roomLogs.slice(-30);
+    const summaryLog = char.roomLogs.find(l => l.isSummary);
+    
+    // 最近30件の中に含まれていない要約ログがあれば、過去の記憶として追加
+    if (summaryLog && !recentLogs.includes(summaryLog)) {
+        ctx += '\n【これまでの重要な記憶・ダイジェスト】\n';
+        ctx += `${summaryLog.text}\n`;
+    }
+
     if (recentLogs.length > 0) {
-        ctx += '\n【最近のRoomでの会話 (直近30件)】\n';
+        ctx += '\n【最近のRoomでの会話】\n';
         recentLogs.forEach(l => {
             const role = l.role === 'user' ? 'ユーザ' : (l.role === 'system' ? 'システム' : char.name);
             ctx += `[${role} ${formatDate(l.timestamp)}] ${l.text}\n`;
@@ -2000,6 +2008,49 @@ async function generateSchedule(char) {
     }
 }
 
+// --- ルーム会話ログ自動要約 ---
+async function summarizeRoomLogs(char) {
+    if (!char.roomLogs || char.roomLogs.length <= 500) return;
+
+    roomLog('ログ要約処理開始(500件超え)', char.roomLogs.length);
+    const msgElem = document.getElementById('room-char-message');
+    if (msgElem) {
+        msgElem.textContent = '要約処理中...';
+        msgElem.classList.add('room-loading');
+    }
+
+    const logsToSummarize = char.roomLogs.slice(0, 100);
+    const logsText = logsToSummarize.map(l => `[${l.role} ${formatDate(l.timestamp)}] ${l.text}`).join('\n');
+
+    const prompt = (char.prompt || '') + `\n\n【指示】
+あなたはこれまでRoomで交わされた100件の会話ログを要約します。
+・おはよう、おやすみ等の日常的な挨拶や、繰り返されている日々の内容、システムメッセージの羅列は省略してください。
+・キャラクターの「心境の変化」「約束事」「印象に残った出来事（グッズの取得や廃棄など）」といった重要なニュアンスのみを抽出してください。
+・重要な出来事には必ず [YYYY/MM/DD HH:mm] の形式で時刻を付記してください。
+・要約自体はあなたの視点（一人称）の備忘録形式で書いてください。
+・回答は JSON 形式ではなく、プレーンテキストのみで出力してください。`;
+
+    try {
+        const raw = await callRoomAPI(prompt, `【過去100件の会話ログ】\n${logsText}`);
+        // 先頭や末尾のマークダウンを削除
+        let summaryText = raw.replace(/^```json\n|^```text\n|^```\n|```$/gm, '').trim();
+
+        const summaryLog = {
+            role: 'system',
+            isSummary: true,
+            text: `【過去の記憶の要約】\n${summaryText}`,
+            timestamp: new Date().toISOString()
+        };
+
+        // 先頭100件を削除し、代わりに要約ログ1件を差し込む
+        char.roomLogs.splice(0, 100, summaryLog);
+        saveData();
+        roomLog('ログ要約処理完了');
+    } catch (e) {
+        roomLog('ログ要約処理失敗:', e.message);
+    }
+}
+
 // --- Room入室処理 ---
 let isRoomBusy = false;
 
@@ -2038,6 +2089,7 @@ async function enterRoom(charId) {
             roomLog(crossed5am ? '朝5時を跨ぎました。日次処理を実行します。' : 'スケジュールが未設定のため生成を実行します。');
             if (char.roomState.lastAccessTime && crossed5am) {
                 await generateDiary(char);
+                await summarizeRoomLogs(char); // ← ログ500件超え要約処理を追加
             }
             await generateSchedule(char);
             // スケジュール変更に伴うお風呂判定などのため再更新
@@ -2065,7 +2117,6 @@ async function enterRoom(charId) {
             role: 'model', text: parsed.message,
             mood: parsed.mood, timestamp: new Date().toISOString()
         });
-        if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
 
         applyRoomResponse(char, parsed);
 
@@ -2104,7 +2155,6 @@ async function handleRoomReply() {
 
     // ユーザメッセージをログに追加
     char.roomLogs.push({ role: 'user', text, timestamp: new Date().toISOString() });
-    if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
     saveData();
 
     try {
@@ -2118,7 +2168,6 @@ async function handleRoomReply() {
             role: 'model', text: parsed.message,
             mood: parsed.mood, timestamp: new Date().toISOString()
         });
-        if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
 
         applyRoomResponse(char, parsed);
         document.getElementById('room-char-message').textContent = parsed.message || '…';
@@ -2145,7 +2194,6 @@ async function handleRoomGift() {
     ensureRoomData(char);
     char.roomState.items.push({ name, state: '', gifted: true, acquiredAt: new Date().toISOString() });
     char.roomLogs.push({ role: 'system', text: `【グッズを贈呈: ${name}】`, timestamp: new Date().toISOString() });
-    if (char.roomLogs.length > 30) char.roomLogs = char.roomLogs.slice(-30);
     saveData();
     input.value = '';
     renderRoomItems();
@@ -2299,9 +2347,19 @@ function renderRoomLogs() {
     char.roomLogs.forEach(log => {
         const entry = document.createElement('div');
         entry.className = 'room-log-entry';
-        const roleClass = log.role === 'user' ? 'room-log-role-user' : 'room-log-role-char';
-        const roleName = log.role === 'user' ? 'ユーザ' : char.name;
-        entry.innerHTML = `<div class="room-log-role ${roleClass}">${escapeHtml(roleName)} (${formatDate(log.timestamp)})</div><div class="room-entry-content">${escapeHtml(log.text)}</div>`;
+        
+        if (log.isSummary) {
+            entry.style.backgroundColor = 'rgba(255, 200, 0, 0.1)';
+            entry.style.borderLeft = '3px solid #ffcc00';
+            entry.innerHTML = `<div class="room-log-role" style="color:#ffcc00;">[要約] システム (${formatDate(log.timestamp)})</div><div class="room-entry-content" style="white-space:pre-wrap; font-size:0.85rem; line-height:1.4;">${escapeHtml(log.text)}</div>`;
+        } else if (log.role === 'system') {
+            entry.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            entry.innerHTML = `<div class="room-log-role" style="color:#aaa;">システム (${formatDate(log.timestamp)})</div><div class="room-entry-content" style="color:#ddd; font-size:0.85rem;">${escapeHtml(log.text)}</div>`;
+        } else {
+            const roleClass = log.role === 'user' ? 'room-log-role-user' : 'room-log-role-char';
+            const roleName = log.role === 'user' ? 'ユーザ' : char.name;
+            entry.innerHTML = `<div class="room-log-role ${roleClass}">${escapeHtml(roleName)} (${formatDate(log.timestamp)})</div><div class="room-entry-content">${escapeHtml(log.text)}</div>`;
+        }
         div.appendChild(entry);
     });
 
