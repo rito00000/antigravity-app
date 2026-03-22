@@ -1892,7 +1892,7 @@ async function buildRoomContext(char) {
   "message": "ユーザへの発言テキスト（お風呂中の場合はお風呂の中から返答すること）",
   "current_activity": "あなたが【今この瞬間】何をしているかの具体的な状況描写(例: 本のページをめくっている、お風呂で鼻歌をうたっている 等)",
   "monologue": "今のあなたの心の中の独り言",
-  "mood": "normal/happy/angry/sad/sleepy/shy/troubled のいずれか",
+  "mood": "normal/happy/angry/sad/sleepy/shy/troubled のいずれか。ユーザへの発言に合わせて気分を選択すること",
   "mood_value": 機嫌値 0-100 (0=最悪, 50=普通, 100=最高),
   "gained_items": ["新たに手に入れたグッズ名"],
   "lost_items": ["手放したグッズ名"],
