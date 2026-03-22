@@ -2400,7 +2400,7 @@ function loadRoomSettingsForm() {
         }
     };
 
-    const keys = ['bgMorning', 'bgEvening', 'bgNight', 'charNormal', 'charHappy', 'charAngry', 'charSad', 'charSleepy'];
+    const keys = ['bgMorning', 'bgEvening', 'bgNight', 'charNormal', 'charHappy', 'charAngry', 'charSad', 'charSleepy', 'charShy', 'charTroubled'];
     keys.forEach(k => loadPreview(k, `preview-${k}`));
 }
 
