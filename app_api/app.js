@@ -520,7 +520,7 @@ function renderThreads() {
             if (e.target.closest('.btn-delete-item')) return;
             AppState.activeThreadId = t.id;
             document.getElementById('chat-header-title').textContent = t.title;
-            renderChat();
+            renderChat(true);
             showView('chat');
         };
 
@@ -531,7 +531,7 @@ function renderThreads() {
 /**
  * チャット画面の描画
  */
-function renderChat() {
+function renderChat(shouldScroll = false) {
     const historyDiv = document.getElementById('chat-history');
     historyDiv.innerHTML = '';
 
@@ -559,9 +559,11 @@ function renderChat() {
         historyDiv.appendChild(div);
     });
 
-    requestAnimationFrame(() => {
-        historyDiv.scrollTop = historyDiv.scrollHeight;
-    });
+    if (shouldScroll) {
+        requestAnimationFrame(() => {
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        });
+    }
 }
 
 /**
@@ -981,7 +983,7 @@ function setupEventListeners() {
         saveData();
         AppState.activeThreadId = newThread.id;
         document.getElementById('chat-header-title').textContent = newThread.title;
-        renderChat();
+        renderChat(true);
         renderCharacters(); // [バグ修正] スレッド作成時にキャラ一覧のスレッド数を更新
         showView('chat');
     };
@@ -1107,7 +1109,7 @@ async function handleSendMessage() {
     });
     inputEl.value = '';
     saveData();
-    renderChat();
+    renderChat(true); // 自分が送った時はスクロールさせる
 
     // ローディング表示
     const historyDiv = document.getElementById('chat-history');
@@ -1213,9 +1215,9 @@ async function handleSendMessage() {
         isSending = false;
         sendBtn.disabled = false;
         inputEl.disabled = false;
-        inputEl.focus();
+        // inputEl.focus(); // [要請] 返信後の自動キーボード表示を無効化
 
-        renderChat();
+        renderChat(false); // AI返信後は自動スクロールさせない
     }
 }
 
