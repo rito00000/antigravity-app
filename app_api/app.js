@@ -2012,14 +2012,16 @@ async function buildRoomContext(char) {
   "mood_value": 機嫌値 0-100 (0=最悪, 50=普通, 100=最高),
   "gained_items": ["新たに手に入れたグッズ名"],
   "lost_items": ["手放したグッズ名"],
-  "updated_items": [{"name": "既存グッズ名", "state": "変化した状態(例: 付箋が増えた 等)"}]
+  "updated_items": [{"name": "既存グッズ名", "state": "変化した状態(例: 付箋が増えた 等)", "protected": true/false}]
 }
 
 【注意事項】
 - messageは必ずキャラクターとして自然に話しかけてください。（数言程度）
 - 現在所持しているグッズの中で、自立的に使用・消費・破棄したものがあれば \`updated_items\` で \`state\`（状態）を更新してください。これがないと部屋の時間が止まっているように見えます。
-- グッズの数が10を超える場合は、なるべく \`lost_items\` でグッズを破棄(削除)して、10以下にするよう努力してください。破棄した場合は会話で触れて下さい。
-- ユーザの不在時に自力で入手したグッズがあれば、  \`gained_items\` に追加し、会話で触れて下さい。入手したものがなければ追加は不要です。`;
+- **「捨てたくない大切なグッズ」がある場合、\`updated_items\` 内で \`protected: true\` を設定してください（最大5個まで）。**
+- **反対に不要になったものは \`protected: false\` に戻すか、そのまま \`lost_items\` に入れて破棄してください。**
+- グッズの数が10を超える場合は、\`protected: true\` 以外のグッズを優先的に \`lost_items\` に入れて破棄し、10以下にするよう努めてください。破棄した場合は会話で触れてください。
+- ユーザの不在時に自力で入手したグッズがあれば、 \`gained_items\` に追加し、会話で触れてください。入手したものがなければ追加は不要です。`;
 
     return ctx;
 }
@@ -2041,21 +2043,46 @@ function applyRoomResponse(char, parsed) {
     // グッズ状態更新
     parsed.updatedItems.forEach(upd => {
         if (!upd.name) return;
-        const item = char.roomState.items.find(i => i.name === upd.name);
-        if (item && upd.state && item.state !== upd.state) {
-            item.state = upd.state;
-            char.roomLogs.push({ role: 'system', text: `【グッズ状態変化】 ${item.name} → ${item.state}`, timestamp: new Date().toISOString() });
-            roomLog('グッズ状態更新:', item.name, '->', item.state);
+        const item = char.roomState.items.find(i => i.name.trim() === upd.name.trim());
+        if (item) {
+            if (upd.state !== undefined && item.state !== upd.state) {
+                item.state = upd.state;
+                char.roomLogs.push({ role: 'system', text: `【グッズ状態変化】 ${item.name} → ${item.state}`, timestamp: new Date().toISOString() });
+                roomLog('グッズ状態更新:', item.name, '->', item.state);
+            }
+            // 捨てないでフラグ (protected) の更新
+            if (upd.protected !== undefined) {
+                // 最大5個制限のチェック（自分自身が既にprotectedならカウントから除く）
+                const protectedCount = char.roomState.items.filter(i => i.protected && i.name !== item.name).length;
+                if (upd.protected && protectedCount >= 5) {
+                    roomLog('警告: protected枠がいっぱいです(5個)。', item.name, 'の保護に失敗。');
+                } else {
+                    item.protected = upd.protected;
+                    roomLog('グッズ保護状態更新:', item.name, 'protected:', item.protected);
+                }
+            }
+        } else {
+            roomLog('警告: 更新対象のグッズが見つかりません:', upd.name);
         }
     });
 
     // グッズ削除
     parsed.lostItems.forEach(name => {
-        const idx = char.roomState.items.findIndex(i => i.name === name);
+        if (!name) return;
+        const targetName = name.trim();
+        const idx = char.roomState.items.findIndex(i => i.name.trim() === targetName);
         if (idx >= 0) {
+            const targetItem = char.roomState.items[idx];
+            // protectedフラグが立っているものは削除をスキップ（念のため）
+            if (targetItem.protected) {
+                roomLog('削除スキップ(保護中):', targetItem.name);
+                return;
+            }
             char.roomState.items.splice(idx, 1);
-            char.roomLogs.push({ role: 'system', text: `【グッズ喪失】 ${name}`, timestamp: new Date().toISOString() });
-            roomLog('グッズ削除:', name);
+            char.roomLogs.push({ role: 'system', text: `【グッズ喪失】 ${targetItem.name}`, timestamp: new Date().toISOString() });
+            roomLog('グッズ削除:', targetItem.name);
+        } else {
+            roomLog('警告: 削除対象のグッズが見つかりません:', name);
         }
     });
 
@@ -2435,6 +2462,9 @@ function renderRoomItems() {
         let nameHtml = `<span class="room-item-name">${escapeHtml(item.name)}</span>`;
         if (item.gifted) {
             nameHtml += `<span class="room-item-gifted-badge">🎁 Present</span>`;
+        }
+        if (item.protected) {
+            nameHtml += `<span class="room-item-protected-badge" style="margin-left:4px; font-size:0.75rem; background:#44c; color:#fff; padding:2px 6px; border-radius:4px;">🔒 Important</span>`;
         }
         
         let stateHtml = '';
