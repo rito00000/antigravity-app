@@ -398,13 +398,33 @@ const views = {
     roomSettings: document.getElementById('room-settings-view')
 };
 
-function showView(viewName) {
+function showView(viewName, pushHistory = true) {
     if (!views[viewName]) {
         console.error('不明なビュー名:', viewName);
         return;
     }
+
+    // デバッグログ
+    console.log(`[Router] View transition: ${viewName} (push: ${pushHistory})`);
+
     Object.values(views).forEach(v => v.classList.remove('active'));
     views[viewName].classList.add('active');
+
+    // 履歴を積む
+    if (pushHistory) {
+        const state = {
+            view: viewName,
+            charId: AppState.activeCharId,
+            threadId: AppState.activeThreadId
+        };
+        const hash = '#' + viewName;
+        // 現在のURLが既に同じハッシュなら pushState しない（重複防止）
+        if (location.hash !== hash) {
+            history.pushState(state, '', hash);
+        } else {
+            history.replaceState(state, '', hash);
+        }
+    }
 
     // Background control for thread and chat views
     if (viewName === 'thread' || viewName === 'chat') {
@@ -419,6 +439,38 @@ function showView(viewName) {
         }
     }
 }
+
+// --- SPA Routing (popstate) ---
+window.addEventListener('popstate', (e) => {
+    const state = e.state;
+
+    // デバッグログ
+    console.log('[Router] PopState detected', state);
+
+    if (state && state.view) {
+        // 状態の復元
+        AppState.activeCharId = state.charId || null;
+        AppState.activeThreadId = state.threadId || null;
+
+        // 画面の再表示（履歴は積まない）
+        showView(state.view, false);
+
+        // 各画面に応じた再描画が必要な場合
+        if (state.view === 'main') renderCharacters();
+        if (state.view === 'thread') renderThreads();
+        if (state.view === 'chat') renderChat(true);
+        if (state.view === 'charMemory') renderMemories();
+        if (state.view === 'room') {
+            const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+            if (char) updateRoomVisuals(char);
+        }
+    } else {
+        // 履歴の底に到達した場合
+        // メイン画面を表示
+        showView('main', false);
+        renderCharacters();
+    }
+});
 
 // ============================================================
 // 5. RENDER FUNCTIONS
@@ -651,19 +703,14 @@ function setupEventListeners() {
 
     // --- Navigation ---
     document.getElementById('btn-global-settings').onclick = () => showView('globalSettings');
-    document.getElementById('btn-close-global-settings').onclick = () => showView('main');
+    document.getElementById('btn-close-global-settings').onclick = () => history.back();
 
     document.getElementById('btn-back-to-chars').onclick = () => {
-        AppState.activeCharId = null;
-        AppState.activeThreadId = null;
-        renderCharacters(); // [バグ修正] メイン画面に戻る際にキャラ一覧を再描画してスレッド数を更新
-        showView('main');
+        history.back();
     };
 
     document.getElementById('btn-back-to-threads').onclick = () => {
-        AppState.activeThreadId = null;
-        renderThreads();
-        showView('thread');
+        history.back();
     };
 
     // --- Character Management ---
@@ -718,13 +765,12 @@ function setupEventListeners() {
 
     // Modal close buttons
     document.getElementById('btn-close-char-settings').onclick = () => {
-        if (AppState.activeCharId) showView('thread');
-        else showView('main');
+        history.back();
     };
 
     const btnCloseMemory = document.getElementById('btn-close-char-memory');
     if (btnCloseMemory) {
-        btnCloseMemory.onclick = () => showView('thread');
+        btnCloseMemory.onclick = () => history.back();
     }
 
     // --- Context Settings (端末情報設定画面) ---
@@ -743,7 +789,7 @@ function setupEventListeners() {
     };
 
     document.getElementById('btn-close-context-settings').onclick = () => {
-        showView('charSettings');
+        history.back();
     };
 
     document.getElementById('btn-test-context').onclick = async () => {
@@ -1006,7 +1052,7 @@ function setupEventListeners() {
         enterRoom(AppState.activeCharId);
     };
     document.getElementById('btn-back-from-room').onclick = () => {
-        showView('thread');
+        history.back();
     };
     document.getElementById('btn-room-send').onclick = handleRoomReply;
     document.getElementById('room-reply-input').addEventListener('keydown', (e) => {
@@ -1022,11 +1068,11 @@ function setupEventListeners() {
     document.getElementById('btn-room-logs').onclick = () => { renderRoomLogs(); showView('roomLogs'); };
     document.getElementById('btn-room-settings').onclick = () => { loadRoomSettingsForm(); showView('roomSettings'); };
     // Room Modal close buttons
-    document.getElementById('btn-close-room-diary').onclick = () => showView('room');
-    document.getElementById('btn-close-room-schedule').onclick = () => showView('room');
-    document.getElementById('btn-close-room-items').onclick = () => showView('room');
-    document.getElementById('btn-close-room-logs').onclick = () => showView('room');
-    document.getElementById('btn-close-room-settings-modal').onclick = () => showView('room');
+    document.getElementById('btn-close-room-diary').onclick = () => history.back();
+    document.getElementById('btn-close-room-schedule').onclick = () => history.back();
+    document.getElementById('btn-close-room-items').onclick = () => history.back();
+    document.getElementById('btn-close-room-logs').onclick = () => history.back();
+    document.getElementById('btn-close-room-settings-modal').onclick = () => history.back();
     // Room Settings save
     document.getElementById('btn-save-room-settings').onclick = saveRoomSettingsForm;
     // Room Gift
