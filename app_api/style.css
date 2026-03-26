@@ -750,6 +750,32 @@ input[type="password"] {
     pointer-events: none;
     opacity: 0.9;
     transition: background-image 0.5s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    text-align: center;
+    font-weight: bold;
+}
+
+.room-w-detail {
+    font-size: 2.2rem;
+    line-height: 1;
+    margin-bottom: 2px;
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+}
+
+.room-w-temp {
+    font-size: 0.72rem;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9);
+    white-space: nowrap;
+}
+
+.room-w-prob {
+    font-size: 0.72rem;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9);
+    margin-top: 1px;
 }
 
 /* キャラクターレイヤー */

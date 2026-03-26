@@ -1413,6 +1413,27 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
     }
 }
 
+/** 天気コードを絵文字に変換する */
+function getWeatherEmoji(code) {
+    const table = {
+        0: '☀️',
+        1: '🌤️',
+        2: '⛅',
+        3: '☁️',
+        45: '🌫️', 48: '🌫️',
+        51: '🌦️', 53: '🌦️', 55: '🌦️',
+        56: '🌦️', 57: '🌦️',
+        61: '🌧️', 63: '☔', 65: '🌊',
+        66: '🧊', 67: '🧊',
+        71: '🌨️', 73: '❄️', 75: '☃️',
+        77: '🌨️',
+        80: '🌦️', 81: '🌧️', 82: '⛈️',
+        85: '🌨️', 86: '❄️',
+        95: '⛈️', 96: '🌩️', 99: '🌩️'
+    };
+    return table[code] || '❓';
+}
+
 /** キャラクターのRoom関連データを遅延初期化 */
 function ensureRoomData(char) {
     if (!char.roomSettings) {
@@ -1538,8 +1559,9 @@ async function updateRoomVisuals(char) {
     }
 
     // 天気
-    const weather = state.weatherCache?.weather || 'sunny';
-    const weatherFileMap = { sunny: 'hare.png', cloudy: 'kumori.png', rainy: 'ame.png', snowy: 'yuki.png' };
+    const wCache = state.weatherCache;
+    const weather = wCache?.weather || 'sunny';
+    const weatherFileMap = { sunny: 'hare.jpg', cloudy: 'kumori.jpg', rainy: 'ame.jpg', snowy: 'yuki.jpg' };
     const wFile = weatherFileMap[weather];
 
     // 以前のObjectURLが残っていれば破棄
@@ -1550,7 +1572,22 @@ async function updateRoomVisuals(char) {
 
     if (wFile) {
         weatherWin.style.backgroundImage = `url('../image/${wFile}')`;
-        weatherWin.style.display = 'block';
+        weatherWin.style.display = 'flex'; // flexに変更して中身を表示
+
+        // 詳細情報の表示
+        const detailEl = document.getElementById('room-weather-detail');
+        const tempEl = document.getElementById('room-weather-temp');
+        const probEl = document.getElementById('room-weather-prob');
+
+        if (detailEl && wCache && typeof wCache.code === 'number') {
+            detailEl.textContent = getWeatherEmoji(wCache.code);
+        }
+        if (tempEl && wCache && typeof wCache.maxTemp === 'number') {
+            tempEl.textContent = `${Math.round(wCache.maxTemp)}℃/${Math.round(wCache.minTemp)}℃`;
+        }
+        if (probEl && wCache && typeof wCache.pop === 'number') {
+            probEl.textContent = `${wCache.pop}%`;
+        }
     } else {
         weatherWin.style.backgroundImage = '';
         weatherWin.style.display = 'none';
@@ -1671,33 +1708,66 @@ async function updateGlobalBackground(charId) {
 async function fetchWeather(char) {
     ensureRoomData(char);
     const today = new Date().toISOString().slice(0, 10);
-    if (char.roomState.weatherCache && char.roomState.weatherCache.date === today) {
+    // キャッシュが今日のもので、かつ詳細データ(code等)が含まれているかチェック
+    if (char.roomState.weatherCache && char.roomState.weatherCache.date === today && typeof char.roomState.weatherCache.code === 'number') {
         roomLog('天気キャッシュ使用:', char.roomState.weatherCache.weather);
         return char.roomState.weatherCache.weather;
     }
+
+    let lat, lon;
     try {
         const pos = await new Promise((resolve, reject) => {
             if (!navigator.geolocation) return reject(new Error('Geolocation非対応'));
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 }); // 少し短めに
         });
-        const lat = pos.coords.latitude.toFixed(2);
-        const lon = pos.coords.longitude.toFixed(2);
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+        lat = pos.coords.latitude.toFixed(3);
+        lon = pos.coords.longitude.toFixed(3);
+        roomLog('位置情報取得成功:', lat, lon);
+    } catch (e) {
+        // 位置情報取得失敗時はデフォルト設定
+        lat = 35.543;
+        lon = 139.446;
+        roomLog('位置情報取得失敗、デフォルトを使用:', e.message);
+    }
+
+    try {
+        // 気温、降水確率も同時に取得
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo`;
         const resp = await fetchWithTimeout(url, {}, 15000);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
+        
         const code = data?.current_weather?.weathercode ?? 0;
+        const maxTemp = data?.daily?.temperature_2m_max?.[0] ?? 0;
+        const minTemp = data?.daily?.temperature_2m_min?.[0] ?? 0;
+        const pop = data?.daily?.precipitation_probability_max?.[0] ?? 0;
+
         let weather = 'sunny';
         if ([1, 2, 3, 45, 48].includes(code)) weather = 'cloudy';
         else if ([51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99].includes(code)) weather = 'rainy';
         else if ([71, 73, 75, 77, 85, 86].includes(code)) weather = 'snowy';
-        char.roomState.weatherCache = { date: today, weather };
+
+        char.roomState.weatherCache = { 
+            date: today, 
+            weather, 
+            code, 
+            maxTemp, 
+            minTemp, 
+            pop 
+        };
         saveData();
-        roomLog('天気取得成功:', weather, '(code:', code, ')');
+        roomLog('天気取得成功:', weather, '(code:', code, 'Temp:', maxTemp, '/', minTemp, 'PoP:', pop, '%)');
         return weather;
     } catch (e) {
         roomLog('天気取得失敗（デフォルト: sunny）:', e.message);
-        char.roomState.weatherCache = { date: today, weather: 'sunny' };
+        char.roomState.weatherCache = { 
+            date: today, 
+            weather: 'sunny', 
+            code: 0, 
+            maxTemp: 20, 
+            minTemp: 10, 
+            pop: 0 
+        };
         saveData();
         return 'sunny';
     }
