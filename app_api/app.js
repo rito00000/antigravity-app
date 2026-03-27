@@ -2137,10 +2137,10 @@ async function buildRoomContext(char) {
         });
     }
 
-    // 日記（直近30件）
-    const recentDiary = char.diary.slice(-30);
+    // 日記（直近5件）
+    const recentDiary = char.diary.slice(-5);
     if (recentDiary.length > 0) {
-        ctx += '\n【最近の日記 (直近30件)】\n';
+        ctx += '\n【最近の日記 (直近5件)】\n';
         recentDiary.forEach(d => { ctx += `[${d.date}] ${d.content}\n`; });
     }
 
@@ -2153,20 +2153,43 @@ async function buildRoomContext(char) {
         }
     });
     allMsgs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const recent30 = allMsgs.slice(-30);
-    if (recent30.length > 0) {
-        ctx += '\n【通常会話スレッドの直近30件の会話】\n';
-        recent30.forEach(m => {
+    const recent20 = allMsgs.slice(-20);
+    if (recent20.length > 0) {
+        ctx += '\n【通常会話スレッドの直近20件の会話】\n';
+        recent20.forEach(m => {
             const role = m.role === 'user' ? 'ユーザ' : char.name;
             ctx += `[${role} ${formatDate(m.timestamp)}] ${m.text.substring(0, 200)}\n`;
         });
     }
 
-    // アクセス履歴
-    const recentAccess = char.roomState.accessHistory.slice(-20);
+    // アクセス履歴（直近10件）
+    const recentAccess = char.roomState.accessHistory.slice(-10);
     if (recentAccess.length > 0) {
         ctx += '\n【Roomへのアクセス履歴】\n';
         recentAccess.forEach(a => { ctx += `${formatDate(a.time)}\n`; });
+    }
+
+    // 最後のアクセスからの経過時間
+    if (char.roomState.lastAccessTime) {
+        try {
+            const lastTime = new Date(char.roomState.lastAccessTime);
+            const now = new Date();
+            const diffMs = now - lastTime;
+            if (diffMs > 0) {
+                const diffMin = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMin / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                let timeStr = "";
+                if (diffDays > 0) timeStr = `${diffDays}日${diffHours % 24}時間ぶり`;
+                else if (diffHours > 0) timeStr = `${diffHours}時間${diffMin % 60}分ぶり`;
+                else timeStr = `${diffMin}分ぶり`;
+                
+                ctx += `\n前回アクセスから約${timeStr}の訪問(または会話の続き)です。`;
+            }
+        } catch (e) {
+            roomLog('経過時間計算エラー:', e.message);
+        }
     }
 
     // 端末情報
@@ -2185,7 +2208,7 @@ async function buildRoomContext(char) {
 - 時刻: ${new Date().toLocaleTimeString('ja-JP')}
 - スケジュール上の状況: ${isBath ? '現在お風呂に入っています（ユーザからは姿が見えず、声だけが聞こえる状態です）' : '室内にいます'}
 
-必ず以下のJSON形式のみで返答してください。JSON以外のテキストは絶対に出力しないでください。
+必ず以下のJSON形式のみで返答してください。**JSON以外のテキストは絶対に出力しないでください。**
 {
   "message": "ユーザへの発言テキスト（お風呂中の場合はお風呂の中から返答すること）",
   "current_activity": "あなたが【今この瞬間】何をしているかの具体的な状況描写(例: 本のページをめくっている、お風呂で鼻歌をうたっている 等)",
@@ -2198,7 +2221,7 @@ async function buildRoomContext(char) {
 }
 
 【注意事項】
-- messageは必ずキャラクターとして自然に話しかけてください。（数言程度）
+- messageは必ずキャラクターとして自然に話しかけてください。（数言程度）過去の会話を確認し、コピペのような繰り返し台詞は言わずにバリエーション豊かに話しかけてください。
 - 現在所持しているグッズの中で、自立的に使用・消費・破棄したものがあれば \`updated_items\` で \`state\`（状態）を更新してください。これがないと部屋の時間が止まっているように見えます。
 - **「捨てたくない大切なグッズ」がある場合、\`updated_items\` 内で \`protected: true\` を設定してください（最大5個まで）。**
 - **反対に不要になったものは \`protected: false\` に戻すか、そのまま \`lost_items\` に入れて破棄してください。**
