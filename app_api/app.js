@@ -713,6 +713,10 @@ function setupEventListeners() {
         history.back();
     };
 
+    // --- Global Background Check on Initial Load ---
+    // (Ensure background reflects current char even if refreshed on chat/thread view)
+    updateGlobalBackground(AppState.activeCharId);
+
     // --- Character Management ---
     document.getElementById('btn-add-character').onclick = () => {
         AppState.activeCharId = null;
@@ -876,22 +880,6 @@ function setupEventListeners() {
     setupModelUI(AppState.model, 'model-', 'modelType');
     setupModelUI(AppState.roomModel, 'room-model-', 'roomModelType');
 
-    document.getElementById('btn-save-global').onclick = () => {
-        AppState.apiKey = document.getElementById('api-key-input').value.trim();
-        const getModelVal = (prefix, radioName) => {
-            const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
-            if (!radioSel) return '';
-            const isSelect = radioSel.value === 'select';
-            return isSelect ? document.getElementById(`${prefix}select`).value : document.getElementById(`${prefix}input`).value.trim();
-        };
-        const mVal = getModelVal('model-', 'modelType');
-        if (mVal) AppState.model = mVal;
-        const rVal = getModelVal('room-model-', 'roomModelType');
-        if (rVal) AppState.roomModel = rVal;
-        
-        saveData();
-        showView('main');
-    };
 
     // --- Character Save ---
     document.getElementById('btn-save-char').onclick = () => {
@@ -1036,15 +1024,7 @@ function setupEventListeners() {
 
     // --- Chat ---
     document.getElementById('btn-send').onclick = handleSendMessage;
-    // Enterキーは改行のみ（送信は送信ボタンのみ）
-
-    // --- Global Settings ---
-    // (Moved to correct position inside setupEventListeners)
-
-
-    // --- Export ---
     document.getElementById('btn-export-chat').onclick = exportCurrentThread;
-    document.getElementById('btn-export-all').onclick = exportAllThreadsZip;
 
     // --- Room ---
     document.getElementById('btn-open-room').onclick = () => {
@@ -1079,6 +1059,53 @@ function setupEventListeners() {
     document.getElementById('btn-room-gift').onclick = handleRoomGift;
     // Room Settings Cropper Events (初期化)
     setupRoomSettingsEvents();
+
+    // --- Full Data Export/Import (Event Delegation) ---
+    const globalSettingsView = document.getElementById('global-settings-view');
+    if (globalSettingsView) {
+        globalSettingsView.onclick = (e) => {
+            const target = e.target;
+            if (target.id === 'btn-export-all') {
+                exportAllThreadsZip();
+            } else if (target.id === 'btn-export-full') {
+                exportAllDataZip();
+            } else if (target.id === 'btn-import-full') {
+                const inputImportFull = document.getElementById('input-import-full');
+                if (inputImportFull) {
+                    inputImportFull.value = '';
+                    inputImportFull.click();
+                }
+            } else if (target.id === 'btn-save-global') {
+                // --- 保存処理 ---
+                AppState.apiKey = document.getElementById('api-key-input').value.trim();
+                const getModelVal = (prefix, radioName) => {
+                    const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
+                    if (!radioSel) return '';
+                    const isSelect = radioSel.value === 'select';
+                    return isSelect ? document.getElementById(`${prefix}select`).value : document.getElementById(`${prefix}input`).value.trim();
+                };
+                const mVal = getModelVal('model-', 'modelType');
+                if (mVal) AppState.model = mVal;
+                const rVal = getModelVal('room-model-', 'roomModelType');
+                if (rVal) AppState.roomModel = rVal;
+                
+                saveData();
+                showView('main');
+            } else if (target.id === 'btn-close-global-settings') {
+                history.back();
+            }
+        };
+    }
+
+    const inputImportFull = document.getElementById('input-import-full');
+    if (inputImportFull) {
+        inputImportFull.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                importAllDataZip(file);
+            }
+        };
+    }
 }
 
 // ============================================================
@@ -1434,6 +1461,161 @@ async function exportAllThreadsZip() {
     } catch (e) {
         console.error('ZIP生成エラー:', e);
         alert('ZIPファイルの作成に失敗しました。');
+    }
+}
+
+/**
+ * 全データエクスポート (AppState + IndexedDB内の画像)
+ */
+async function exportAllDataZip() {
+    if (!confirm('全てのデータ（設定、キャラクター、会話履歴、画像）をバックアップ用にZIPエクスポートしますか？')) return;
+
+    if (typeof JSZip === 'undefined') {
+        alert('ZIPライブラリの読み込みに失敗しました。');
+        return;
+    }
+
+    const zip = new JSZip();
+    
+    // 1. AppState (JSON) - APIキーは除外
+    const dataToSave = {
+        model: AppState.model,
+        roomModel: AppState.roomModel,
+        characters: AppState.characters,
+        threads: AppState.threads,
+        memories: AppState.memories
+    };
+    zip.file('data.json', JSON.stringify(dataToSave, null, 2));
+
+    // 2. Images (IndexedDB)
+    try {
+        const db = await openDB();
+        const imagesFolder = zip.folder('images');
+        
+        const allImages = await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_IMAGES, 'readonly');
+            const store = tx.objectStore(STORE_IMAGES);
+            const results = [];
+            
+            const req = store.openCursor();
+            req.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    results.push({ key: cursor.key, blob: cursor.value });
+                    cursor.continue();
+                } else {
+                    resolve(results);
+                }
+            };
+            req.onerror = () => reject(req.error);
+        });
+
+        allImages.forEach(img => {
+            if (img.blob instanceof Blob) {
+                imagesFolder.file(img.key, img.blob);
+            }
+        });
+
+        console.log(`[Export] ${allImages.length} 枚の画像をアーカイブに追加しました`);
+    } catch (e) {
+        console.error('[Export] 画像の取得に失敗しました:', e);
+        if (!confirm('画像データの取得に一部失敗しました。設定と履歴のみでエクスポートを続行しますか？')) return;
+    }
+
+    // 3. Generate and Download
+    try {
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        const d = new Date();
+        const yyyymmdd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        a.download = `${yyyymmdd}_antigravity_backup.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error('ZIP生成エラー:', e);
+        alert('ZIPファイルの作成に失敗しました。');
+    }
+}
+
+/**
+ * 全データインポート (ZIPから復元)
+ */
+async function importAllDataZip(file) {
+    if (!file) return;
+
+    const warning = '【重要】全データインポートを実行すると、現在このブラウザに保存されているデータ（設定、キャラクター、履歴、画像すべて）は削除され、インポートする内容に置き換わります。\n\n本当によろしいですか？';
+    if (!confirm(warning)) return;
+
+    if (typeof JSZip === 'undefined') {
+        alert('ZIPライブラリの読み込みに失敗しました。');
+        return;
+    }
+
+    try {
+        const zip = new JSZip();
+        const loadedZip = await zip.loadAsync(file);
+        
+        // 1. Load data.json
+        const dataFile = loadedZip.file('data.json');
+        if (!dataFile) {
+            throw new Error('バックアップファイル内に data.json が見つかりませんでした。有効なバックアップではありません。');
+        }
+        const dataJson = await dataFile.async('text');
+        const importedData = JSON.parse(dataJson);
+
+        // 2. Validate data
+        if (!importedData.characters || !Array.isArray(importedData.characters)) {
+            throw new Error('バックアップデータが不正です。');
+        }
+
+        // 3. Clear and Load Images to IndexedDB
+        const db = await openDB();
+        const imgFolder = loadedZip.folder('images');
+        
+        // Clear existing images
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_IMAGES, 'readwrite');
+            const store = tx.objectStore(STORE_IMAGES);
+            const req = store.clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+
+        // Add new images
+        const imageFiles = [];
+        imgFolder.forEach((relativePath, file) => {
+            if (!file.dir) {
+                imageFiles.push({ key: relativePath, file });
+            }
+        });
+
+        for (const img of imageFiles) {
+            const blob = await img.file.async('blob');
+            await saveImageToDB(img.key, blob);
+        }
+        console.log(`[Import] ${imageFiles.length} 枚の画像をリストアしました`);
+
+        // 4. Update AppState and Save (APIキーは上書きしない)
+        AppState.model = importedData.model || 'gemini-3.1-flash-lite-preview';
+        AppState.roomModel = importedData.roomModel || 'gemini-3.1-flash-lite-preview';
+        AppState.characters = importedData.characters;
+        AppState.threads = importedData.threads || [];
+        AppState.memories = importedData.memories || [];
+
+        await saveData();
+
+        alert('データのインポートが完了しました。\n※APIキーは再設定が必要です。\n\nアプリケーションを再読み込みします。');
+        
+        // 5. Reload (不具合が出づらい確実な方法として location.reload(true) は非推奨なため単純な reload)
+        location.href = location.origin + location.pathname;
+
+    } catch (e) {
+        console.error('[Import] エラー:', e);
+        alert('インポートに失敗しました: ' + e.message);
     }
 }
 
