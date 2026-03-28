@@ -1593,13 +1593,14 @@ input[type="password"] {
 }
 
 .med-cal-period-dot {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #ff6b8a;
     position: absolute;
-    bottom: 2px;
-    right: 2px;
+    top: 6px;
+    right: 6px;
+    box-shadow: 0 0 4px rgba(255, 107, 138, 0.8);
 }
 
 /* 睡眠品質カラー（セル背景） */

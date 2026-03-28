@@ -3399,9 +3399,55 @@ function savePeriodSettings() {
         cycleLength: parseInt(document.getElementById('med-period-cycle').value) || 28
     };
     saveData();
-    updatePeriodDisplay(char);
+    // 表示更新
+    updateMedSummary(char);
+    renderMedCalendar(char);
+    
     document.getElementById('med-period-panel').style.display = 'none';
-    medLog('生理日設定保存');
+    medLog('生理日設定保存・カレンダー更新');
+}
+
+/** 診察ルームのサマリー（上部）を更新 */
+function updateMedSummary(char) {
+    const today = new Date();
+    const todayStr = getLocalYMD(today);
+    document.getElementById('med-today-date').textContent = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+
+    const ps = char.medicalData.periodSettings;
+    const periodEl = document.getElementById('med-today-period');
+    
+    if (ps && ps.lastPeriodDate) {
+        // 次回の予定日計算（もっともシンプルな方法）
+        const parts = ps.lastPeriodDate.split('-');
+        const lastDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const cycle = ps.cycleLength || 28;
+        
+        // 直近のサイクル開始日を探す
+        let nextP = new Date(lastDate);
+        while (nextP < today) {
+            nextP.setDate(nextP.getDate() + cycle);
+        }
+        periodEl.textContent = getLocalYMD(nextP);
+    } else {
+        periodEl.textContent = '未設定';
+    }
+
+    // Fitbitデータ反映
+    const cache = char.medicalData.fitbitCache[todayStr] || {};
+    document.getElementById('med-today-temp').textContent = cache.tempVariation ? `${cache.tempVariation > 0 ? '+' : ''}${cache.tempVariation}℃` : '-';
+    document.getElementById('med-today-heart').textContent = cache.heartRate ? `${cache.heartRate} bpm` : '-';
+    
+    if (cache.sleep && cache.sleep.totalMinutes) {
+        const h = Math.floor(cache.sleep.totalMinutes / 60);
+        const m = cache.sleep.totalMinutes % 60;
+        document.getElementById('med-today-sleep').textContent = `${h}時間${m}分 (効率${cache.sleep.efficiency}%)`;
+    } else {
+        document.getElementById('med-today-sleep').textContent = '-';
+    }
+
+    const moonAge = getMoonAge(today);
+    const moon = getMoonDisplay(moonAge);
+    document.getElementById('med-today-moon').textContent = `${moon.emoji} ${moon.name}`;
 }
 
 // --- カレンダー ---
@@ -3460,7 +3506,7 @@ function renderMedCalendar(char) {
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    const todayStr = getLocalYMD(today); // UTCではなくローカル時刻で比較
 
     // 生理日計算
     const periodDays = getPeriodDays(char);
@@ -3543,18 +3589,23 @@ function getPeriodDays(char) {
     if (!ps || !ps.lastPeriodDate) return days;
 
     const cycle = ps.cycleLength || 28;
-    // タイムゾーンによる日付のズレを防ぐため文字列パース
     const parts = ps.lastPeriodDate.split('-');
     if (parts.length !== 3) return days;
-    const lastDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    
+    // 基準日（ここを絶対に破壊しない）
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1; // 月は0-indexed
+    const d = parseInt(parts[2], 10);
+    const baseDate = new Date(y, m, d);
 
-    // 過去3サイクル分 + 次の1サイクル分をプロット
-    for (let c = -3; c <= 1; c++) {
-        const cycleStart = new Date(lastDate);
-        cycleStart.setDate(cycleStart.getDate() + c * cycle);
-        for (let d = 0; d < 7; d++) {
-            const day = new Date(cycleStart);
-            day.setDate(day.getDate() + d);
+    // 過去3サイクル 〜 未来2サイクル分を安全に計算
+    for (let c = -3; c <= 2; c++) {
+        // 各サイクルの開始日を算出（必ず新規 new Date でコピー）
+        const cycleStart = new Date(y, m, d + (c * cycle));
+        
+        // その日から7日間をプロット
+        for (let i = 0; i < 7; i++) {
+            const day = new Date(cycleStart.getFullYear(), cycleStart.getMonth(), cycleStart.getDate() + i);
             days.add(getLocalYMD(day));
         }
     }
@@ -3977,7 +4028,7 @@ function initMedicalRoom() {
     medCalYear = now.getFullYear();
     medCalMonth = now.getMonth();
     renderMedCalendar(char);
-    updateTodaySummary(char);
+    updateMedSummary(char);
     loadMedConsultationBg(char);
 }
 
