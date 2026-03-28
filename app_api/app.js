@@ -10,7 +10,11 @@ const AppState = {
     apiKey: '',
     model: 'gemini-3.1-flash-lite-preview',
     roomModel: 'gemini-3.1-flash-lite-preview',
-    characters: [], // { id, name, prompt, appearance, roomSettings, roomState, roomLogs, diary, roomLongTermMemory }
+    medAnalysisModel: 'gemini-3.1-flash-lite-preview',
+    medChatModel: 'gemini-3.1-flash-lite-preview',
+    fitbitGasUrl: '',
+    fitbitSecret: '',
+    characters: [], // { id, name, prompt, appearance, roomSettings, roomState, roomLogs, diary, roomLongTermMemory, medicalData }
     threads: [],    // { id, charId, title, createdAt, messages: [] }
     memories: [],   // { id, charId, createdAt, content }
     activeCharId: null,
@@ -60,6 +64,10 @@ async function loadData() {
             AppState.apiKey = data.apiKey || '';
             AppState.model = data.model || 'gemini-3.1-flash-lite-preview';
             AppState.roomModel = data.roomModel || 'gemini-3.1-flash-lite-preview';
+            AppState.medAnalysisModel = data.medAnalysisModel || 'gemini-3.1-flash-lite-preview';
+            AppState.medChatModel = data.medChatModel || 'gemini-3.1-flash-lite-preview';
+            AppState.fitbitGasUrl = data.fitbitGasUrl || '';
+            AppState.fitbitSecret = data.fitbitSecret || '';
             AppState.characters = Array.isArray(data.characters) ? data.characters : [];
             AppState.threads = Array.isArray(data.threads) ? data.threads : [];
             AppState.memories = Array.isArray(data.memories) ? data.memories : [];
@@ -73,6 +81,10 @@ async function loadData() {
             AppState.apiKey = parsed.apiKey || '';
             AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
             AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
+            AppState.medAnalysisModel = parsed.medAnalysisModel || 'gemini-3.1-flash-lite-preview';
+            AppState.medChatModel = parsed.medChatModel || 'gemini-3.1-flash-lite-preview';
+            AppState.fitbitGasUrl = parsed.fitbitGasUrl || '';
+            AppState.fitbitSecret = parsed.fitbitSecret || '';
             AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
             AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
             AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
@@ -89,6 +101,10 @@ async function loadData() {
                 AppState.apiKey = parsed.apiKey || '';
                 AppState.model = parsed.model || 'gemini-3.1-flash-lite-preview';
                 AppState.roomModel = parsed.roomModel || 'gemini-3.1-flash-lite-preview';
+                AppState.medAnalysisModel = parsed.medAnalysisModel || 'gemini-3.1-flash-lite-preview';
+                AppState.medChatModel = parsed.medChatModel || 'gemini-3.1-flash-lite-preview';
+                AppState.fitbitGasUrl = parsed.fitbitGasUrl || '';
+                AppState.fitbitSecret = parsed.fitbitSecret || '';
                 AppState.characters = Array.isArray(parsed.characters) ? parsed.characters : [];
                 AppState.threads = Array.isArray(parsed.threads) ? parsed.threads : [];
                 AppState.memories = Array.isArray(parsed.memories) ? parsed.memories : [];
@@ -106,6 +122,10 @@ async function saveData() {
             apiKey: AppState.apiKey,
             model: AppState.model,
             roomModel: AppState.roomModel,
+            medAnalysisModel: AppState.medAnalysisModel,
+            medChatModel: AppState.medChatModel,
+            fitbitGasUrl: AppState.fitbitGasUrl,
+            fitbitSecret: AppState.fitbitSecret,
             characters: AppState.characters,
             threads: AppState.threads,
             memories: AppState.memories
@@ -390,12 +410,15 @@ const views = {
     charMemory: document.getElementById('char-memory-view'),
     contextSettings: document.getElementById('context-settings-view'),
     globalSettings: document.getElementById('global-settings-view'),
+    modelSettings: document.getElementById('model-settings-view'),
     room: document.getElementById('room-view'),
     roomDiary: document.getElementById('room-diary-view'),
     roomSchedule: document.getElementById('room-schedule-view'),
     roomItems: document.getElementById('room-items-view'),
     roomLogs: document.getElementById('room-logs-view'),
-    roomSettings: document.getElementById('room-settings-view')
+    roomSettings: document.getElementById('room-settings-view'),
+    medicalRoom: document.getElementById('medical-room-view'),
+    medicalRoomSettings: document.getElementById('medical-room-settings-view')
 };
 
 function showView(viewName, pushHistory = true) {
@@ -463,6 +486,9 @@ window.addEventListener('popstate', (e) => {
         if (state.view === 'room') {
             const char = AppState.characters.find(c => c.id === AppState.activeCharId);
             if (char) updateRoomVisuals(char);
+        }
+        if (state.view === 'medicalRoom') {
+            if (typeof initMedicalRoom === 'function') initMedicalRoom();
         }
     } else {
         // 履歴の底に到達した場合
@@ -702,7 +728,12 @@ function deleteThread(threadId) {
 function setupEventListeners() {
 
     // --- Navigation ---
-    document.getElementById('btn-global-settings').onclick = () => showView('globalSettings');
+    document.getElementById('btn-global-settings').onclick = () => {
+        // Fitbit設定値の再セット
+        document.getElementById('fitbit-gas-url-input').value = AppState.fitbitGasUrl;
+        document.getElementById('fitbit-secret-input').value = AppState.fitbitSecret;
+        showView('globalSettings');
+    };
     document.getElementById('btn-close-global-settings').onclick = () => history.back();
 
     document.getElementById('btn-back-to-chars').onclick = () => {
@@ -1060,6 +1091,56 @@ function setupEventListeners() {
     // Room Settings Cropper Events (初期化)
     setupRoomSettingsEvents();
 
+    // --- Medical Room ---
+    document.getElementById('btn-open-medical-room').onclick = () => {
+        if (!AppState.activeCharId) return;
+        enterMedicalRoom();
+    };
+    document.getElementById('btn-back-from-medical').onclick = () => {
+        exitMedicalRoom();
+    };
+    // 診察ルーム設定
+    document.getElementById('btn-open-medical-room-settings').onclick = () => {
+        loadMedicalRoomSettingsForm();
+        showView('medicalRoomSettings');
+    };
+    document.getElementById('btn-close-medical-room-settings').onclick = () => history.back();
+    document.getElementById('btn-save-medical-room-settings').onclick = () => {
+        showView('charSettings');
+    };
+    // モデル設定画面
+    document.getElementById('btn-open-model-settings').onclick = () => {
+        loadModelSettingsForm();
+        showView('modelSettings');
+    };
+    document.getElementById('btn-close-model-settings').onclick = () => history.back();
+    document.getElementById('btn-save-model-settings').onclick = () => {
+        saveModelSettingsForm();
+        history.back();
+    };
+    // 診察ルームタブ切り替え（上部・下部両方）
+    document.querySelectorAll('[data-med-tab]').forEach(btn => {
+        btn.addEventListener('click', () => switchMedTab(btn.getAttribute('data-med-tab')));
+    });
+    // 診察画面内ボタン
+    document.querySelectorAll('[data-consult]').forEach(btn => {
+        btn.addEventListener('click', () => switchConsultMode(btn.getAttribute('data-consult')));
+    });
+    // カレンダーナビ
+    document.getElementById('btn-med-cal-prev').onclick = () => navigateCalendar(-1);
+    document.getElementById('btn-med-cal-next').onclick = () => navigateCalendar(1);
+    // 手動更新
+    document.getElementById('btn-med-refresh').onclick = () => manualRefreshFitbit();
+    // 生理日設定
+    document.getElementById('btn-med-period-toggle').onclick = () => {
+        const panel = document.getElementById('med-period-panel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+    document.getElementById('btn-med-period-save').onclick = () => savePeriodSettings();
+    // Fitbit設定の初期値
+    document.getElementById('fitbit-gas-url-input').value = AppState.fitbitGasUrl;
+    document.getElementById('fitbit-secret-input').value = AppState.fitbitSecret;
+
     // --- Full Data Export/Import (Event Delegation) ---
     const globalSettingsView = document.getElementById('global-settings-view');
     if (globalSettingsView) {
@@ -1088,6 +1169,10 @@ function setupEventListeners() {
                 if (mVal) AppState.model = mVal;
                 const rVal = getModelVal('room-model-', 'roomModelType');
                 if (rVal) AppState.roomModel = rVal;
+                
+                // Fitbit設定
+                AppState.fitbitGasUrl = document.getElementById('fitbit-gas-url-input').value.trim();
+                AppState.fitbitSecret = document.getElementById('fitbit-secret-input').value.trim();
                 
                 saveData();
                 showView('main');
@@ -1481,6 +1566,10 @@ async function exportAllDataZip() {
     const dataToSave = {
         model: AppState.model,
         roomModel: AppState.roomModel,
+        medAnalysisModel: AppState.medAnalysisModel,
+        medChatModel: AppState.medChatModel,
+        fitbitGasUrl: AppState.fitbitGasUrl,
+        fitbitSecret: AppState.fitbitSecret,
         characters: AppState.characters,
         threads: AppState.threads,
         memories: AppState.memories
@@ -1602,6 +1691,10 @@ async function importAllDataZip(file) {
         // 4. Update AppState and Save (APIキーは上書きしない)
         AppState.model = importedData.model || 'gemini-3.1-flash-lite-preview';
         AppState.roomModel = importedData.roomModel || 'gemini-3.1-flash-lite-preview';
+        AppState.medAnalysisModel = importedData.medAnalysisModel || 'gemini-3.1-flash-lite-preview';
+        AppState.medChatModel = importedData.medChatModel || 'gemini-3.1-flash-lite-preview';
+        AppState.fitbitGasUrl = importedData.fitbitGasUrl || '';
+        AppState.fitbitSecret = importedData.fitbitSecret || '';
         AppState.characters = importedData.characters;
         AppState.threads = importedData.threads || [];
         AppState.memories = importedData.memories || [];
@@ -1626,15 +1719,20 @@ async function importAllDataZip(file) {
 /** Room用デバッグログ */
 function roomLog(...args) { console.log('[Room]', ...args); }
 
-/** fetchWithTimeout: AbortControllerでタイムアウト付きfetch */
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
+        // GASのリダイレクトに対応し、Service Workerによる干渉も防ぐためのオプション設定
+        const response = await fetch(url, { 
+            mode: 'cors',
+            redirect: 'follow',
+            ...options, 
+            signal: controller.signal 
+        });
         return response;
     } catch (e) {
-        if (e.name === 'AbortError') throw new Error('リクエストがタイムアウトしました（30秒）');
+        if (e.name === 'AbortError') throw new Error('リクエストがタイムアウトしました（' + (timeoutMs/1000) + '秒）');
         throw e;
     } finally {
         clearTimeout(timeoutId);
@@ -1681,6 +1779,19 @@ function ensureRoomData(char) {
     if (!Array.isArray(char.roomLogs)) char.roomLogs = [];
     if (!Array.isArray(char.diary)) char.diary = [];
     if (!Array.isArray(char.roomLongTermMemory)) char.roomLongTermMemory = [];
+    // 診察ルーム用データ初期化
+    if (!char.medicalData) {
+        char.medicalData = {
+            fitbitCache: {},       // { 'YYYY-MM-DD': { sleep, heart, temperature } }
+            lastFetchTime: null,   // 最終Fitbitデータ取得時刻
+            firstFetchDone: false, // 初回2ヶ月取得済みフラグ
+            periodSettings: null,  // { lastPeriodDate, cycleLength }
+            karte: '',             // AIが管理するカルテテキスト
+            analysisResults: [],   // 分析結果配列 { date, content, modelUsed }
+            chatLogs: [],          // 診察チャットログ { role, text, timestamp, source:'medical' }
+            lastAnalysisDate: null // 最終分析実行日
+        };
+    }
 }
 
 /** 機嫌のアイコンとテキストを返す */
@@ -2887,7 +2998,992 @@ function setupRoomSettingsEvents() {
 }
 
 // ============================================================
-// 11. INITIALIZATION
+// 11. MEDICAL ROOM FEATURE
+// ============================================================
+function medLog(...args) { console.log('[Medical]', ...args); }
+
+let medCalYear, medCalMonth; // カレンダー表示年月
+let medCurrentConsult = null; // 現在の診察モード
+let isMedBusy = false;
+let _medFromMedical = false; // 診察ルームから戻ってきたフラグ
+
+/** 月齢計算（簡易版: Tung's Algorithm） */
+function getMoonAge(date) {
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    let c = Math.floor(y / 100);
+    let n = y - 19 * Math.floor(y / 19);
+    let k = Math.floor((c - 17) / 25);
+    let i = c - Math.floor(c / 4) - Math.floor((c - k) / 3) + 19 * n + 15;
+    i = i - 30 * Math.floor(i / 30);
+    i = i - Math.floor(i / 28) * (1 - Math.floor(i / 28) * Math.floor(29 / (i + 1)) * Math.floor((21 - n) / 11));
+    let j = y + Math.floor(y / 4) + i + 2 - c + Math.floor(c / 4);
+    j = j - 7 * Math.floor(j / 7);
+    let l = i - j;
+    const age = m + d + l;
+    return ((age % 30) + 30) % 30;
+}
+
+/** 月齢→絵文字・名前 */
+function getMoonDisplay(age) {
+    if (age < 1.85) return { emoji: '🌑', name: '新月' };
+    if (age < 5.53) return { emoji: '🌒', name: '三日月' };
+    if (age < 9.22) return { emoji: '🌓', name: '上弦の月' };
+    if (age < 12.91) return { emoji: '🌔', name: '十日夜の月' };
+    if (age < 16.61) return { emoji: '🌕', name: '満月' };
+    if (age < 20.30) return { emoji: '🌖', name: '十六夜' };
+    if (age < 23.99) return { emoji: '🌗', name: '下弦の月' };
+    if (age < 27.68) return { emoji: '🌘', name: '二十六夜' };
+    return { emoji: '🌑', name: '新月' };
+}
+
+/** 日本の祝日簡易判定 (年,月,日) */
+function isJapaneseHoliday(y, m, d) {
+    const fixed = {
+        '1-1': true, '2-11': true, '2-23': true, '3-21': true,
+        '4-29': true, '5-3': true, '5-4': true, '5-5': true,
+        '7-20': true, '8-11': true, '9-23': true, '10-14': true,
+        '11-3': true, '11-23': true
+    };
+    return !!fixed[`${m}-${d}`];
+}
+
+/** モデル設定画面の読込 */
+function loadModelSettingsForm() {
+    const setupMdlUI = (stateValue, prefix, radioName) => {
+        const select = document.getElementById(`${prefix}select`);
+        const input = document.getElementById(`${prefix}input`);
+        const radios = document.getElementsByName(radioName);
+        let found = false;
+        if (select) {
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === stateValue) {
+                    select.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (found) {
+            if (radios[0]) radios[0].checked = true;
+            if (input) input.value = '';
+        } else {
+            if (radios[1]) radios[1].checked = true;
+            if (input) input.value = stateValue || '';
+        }
+        const updateUI = () => {
+            const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
+            if (!radioSel) return;
+            const isSelect = radioSel.value === 'select';
+            if (select) select.disabled = !isSelect;
+            if (input) { input.disabled = isSelect; if (!isSelect) input.focus(); }
+        };
+        radios.forEach(r => r.addEventListener('change', updateUI));
+        updateUI();
+    };
+    setupMdlUI(AppState.model, 'mdl-model-', 'mdlModelType');
+    setupMdlUI(AppState.roomModel, 'mdl-room-model-', 'mdlRoomModelType');
+    setupMdlUI(AppState.medAnalysisModel, 'mdl-med-analysis-model-', 'mdlMedAnalysisModelType');
+    setupMdlUI(AppState.medChatModel, 'mdl-med-chat-model-', 'mdlMedChatModelType');
+}
+
+/** モデル設定画面の保存 */
+function saveModelSettingsForm() {
+    const getVal = (prefix, radioName) => {
+        const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
+        if (!radioSel) return '';
+        return radioSel.value === 'select'
+            ? document.getElementById(`${prefix}select`).value
+            : document.getElementById(`${prefix}input`).value.trim();
+    };
+    const m = getVal('mdl-model-', 'mdlModelType');
+    if (m) AppState.model = m;
+    const r = getVal('mdl-room-model-', 'mdlRoomModelType');
+    if (r) AppState.roomModel = r;
+    const ma = getVal('mdl-med-analysis-model-', 'mdlMedAnalysisModelType');
+    if (ma) AppState.medAnalysisModel = ma;
+    const mc = getVal('mdl-med-chat-model-', 'mdlMedChatModelType');
+    if (mc) AppState.medChatModel = mc;
+    saveData();
+    medLog('モデル設定保存完了');
+}
+
+/** 診察ルーム設定画面の読込 */
+function loadMedicalRoomSettingsForm() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    const key = 'medBg';
+    const loadPreview = async (k, elementId) => {
+        const url = await loadImageFromDB(`${char.id}_${k}`);
+        const preview = document.getElementById(elementId);
+        if (!preview) return;
+        const slot = preview.parentElement;
+        if (url) {
+            preview.style.backgroundImage = `url('${url}')`;
+            slot.classList.add('has-image');
+            slot.querySelector('.room-img-delete-btn').style.display = 'flex';
+        } else {
+            preview.style.backgroundImage = '';
+            slot.classList.remove('has-image');
+            slot.querySelector('.room-img-delete-btn').style.display = 'none';
+        }
+    };
+    loadPreview(key, `preview-${key}`);
+}
+
+/** タブ切り替え */
+function switchMedTab(tabName) {
+    document.querySelectorAll('.med-tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.med-tab').forEach(el => el.classList.toggle('active', el.getAttribute('data-med-tab') === tabName));
+    document.querySelectorAll('.med-bottom-tab').forEach(el => el.classList.toggle('active', el.getAttribute('data-med-tab') === tabName));
+    const target = document.getElementById(`med-tab-${tabName}`);
+    if (target) target.classList.add('active');
+    medLog('タブ切替:', tabName);
+}
+
+/** 診察ルーム入室 */
+async function enterMedicalRoom() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+
+    showView('medicalRoom');
+    switchMedTab('calendar');
+
+    // 背景画像ロード（診察タブ用）
+    loadMedConsultationBg(char);
+
+    // Fitbitデータ取得
+    await autoFetchFitbitData(char);
+
+    // カレンダー初期化
+    const now = new Date();
+    medCalYear = now.getFullYear();
+    medCalMonth = now.getMonth();
+    renderMedCalendar(char);
+    updateTodaySummary(char);
+    
+    // 生理日設定の復元
+    if (char.medicalData.periodSettings) {
+        document.getElementById('med-period-last').value = char.medicalData.periodSettings.lastPeriodDate || '';
+        document.getElementById('med-period-cycle').value = char.medicalData.periodSettings.cycleLength || 28;
+    }
+
+    medLog('診察ルーム入室');
+}
+
+/** 診察ルームから通常Roomへ戻る */
+function exitMedicalRoom() {
+    _medFromMedical = true;
+    // 通常Roomに戻る（diagnoseから戻ったコンテキストを付与）
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (char) {
+        ensureRoomData(char);
+        char.roomLogs.push({
+            role: 'system',
+            text: '【診察ルームから戻りました】',
+            timestamp: new Date().toISOString(),
+            source: 'medical'
+        });
+        saveData();
+    }
+    showView('room');
+    if (char) updateRoomVisuals(char);
+    medLog('診察ルームから通常Roomへ戻り');
+}
+
+/** 診察タブ背景画像ロード */
+async function loadMedConsultationBg(char) {
+    const bgEl = document.getElementById('med-consultation-bg');
+    if (!bgEl) return;
+    const url = await loadImageFromDB(`${char.id}_medBg`);
+    if (url) {
+        bgEl.style.backgroundImage = `url('${url}')`;
+    } else {
+        bgEl.style.backgroundImage = '';
+        bgEl.style.background = 'linear-gradient(135deg, #1a1525 0%, #0f1a2e 100%)';
+    }
+}
+
+// --- Fitbitデータ取得 ---
+async function autoFetchFitbitData(char) {
+    if (!AppState.fitbitGasUrl || !AppState.fitbitSecret) {
+        medLog('Fitbit未設定（GAS URL or Secret）');
+        return;
+    }
+
+    const now = Date.now();
+    const lastFetch = char.medicalData.lastFetchTime ? new Date(char.medicalData.lastFetchTime).getTime() : 0;
+    const oneHour = 60 * 60 * 1000;
+
+    if (now - lastFetch < oneHour) {
+        medLog('前回取得から1H未満、スキップ');
+        return;
+    }
+
+    await fetchFitbitData(char, false);
+}
+
+async function manualRefreshFitbit() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+
+    if (!AppState.fitbitGasUrl || !AppState.fitbitSecret) {
+        alert('アプリ設定でFitbit連携のGAS URLとパスワードを設定してください。');
+        return;
+    }
+
+    const btn = document.getElementById('btn-med-refresh');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+
+    try {
+        await fetchFitbitData(char, true);
+        renderMedCalendar(char);
+        updateTodaySummary(char);
+    } catch (e) {
+        medLog('手動更新エラー:', e.message);
+        alert('データ更新に失敗しました: ' + e.message);
+    } finally {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+    }
+}
+
+async function fetchFitbitData(char, forceRefresh) {
+    medLog('Fitbitデータ取得開始', forceRefresh ? '(強制)' : '');
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    let startDate, endDate = todayStr;
+
+    if (!char.medicalData.firstFetchDone) {
+        // 初回: 直近2ヶ月分
+        const twoMonthsAgo = new Date(today);
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        startDate = twoMonthsAgo.toISOString().slice(0, 10);
+        medLog('初回取得: ', startDate, '→', endDate);
+    } else {
+        // 以降: 最終取得日前日から
+        const lastDate = findLastCachedDate(char);
+        if (lastDate) {
+            const d = new Date(lastDate);
+            d.setDate(d.getDate() - 1);
+            startDate = d.toISOString().slice(0, 10);
+        } else {
+            const twoMonthsAgo = new Date(today);
+            twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+            startDate = twoMonthsAgo.toISOString().slice(0, 10);
+        }
+    }
+
+    try {
+        const url = `${AppState.fitbitGasUrl}?action=getData&token=${encodeURIComponent(AppState.fitbitSecret)}&startDate=${startDate}&endDate=${endDate}&type=all`;
+        const response = await fetchWithTimeout(url, {}, 60000); // GASは遅いので60s
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // キャッシュに格納
+        if (data.sleep && Array.isArray(data.sleep)) {
+            data.sleep.forEach(s => {
+                if (!char.medicalData.fitbitCache[s.date]) char.medicalData.fitbitCache[s.date] = {};
+                char.medicalData.fitbitCache[s.date].sleep = s;
+            });
+        }
+        if (data.heart && Array.isArray(data.heart)) {
+            data.heart.forEach(h => {
+                if (!char.medicalData.fitbitCache[h.date]) char.medicalData.fitbitCache[h.date] = {};
+                char.medicalData.fitbitCache[h.date].heart = h;
+            });
+        }
+        if (data.temperature && Array.isArray(data.temperature)) {
+            data.temperature.forEach(t => {
+                if (!char.medicalData.fitbitCache[t.date]) char.medicalData.fitbitCache[t.date] = {};
+                char.medicalData.fitbitCache[t.date].temperature = t;
+            });
+        }
+
+        char.medicalData.lastFetchTime = new Date().toISOString();
+        char.medicalData.firstFetchDone = true;
+        saveData();
+        medLog('Fitbitデータ取得完了');
+
+    } catch (e) {
+        medLog('Fitbitデータ取得失敗:', e.message);
+        throw e;
+    }
+}
+
+function findLastCachedDate(char) {
+    const dates = Object.keys(char.medicalData.fitbitCache).sort();
+    return dates.length > 0 ? dates[dates.length - 1] : null;
+}
+
+// --- 今日のサマリー ---
+function updateTodaySummary(char) {
+    const now = new Date();
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    const dow = weekdays[now.getDay()];
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+
+    document.getElementById('med-today-date').textContent = `${m}/${d}(${dow}) ${hh}:${mm}取得データ`;
+
+    const todayStr = now.toISOString().slice(0, 10);
+    const cache = char.medicalData.fitbitCache[todayStr] || {};
+
+    // 心拍
+    const heart = cache.heart;
+    if (heart && heart.restingHeartRate) {
+        const min = heart.minHeartRate || '-';
+        const max = heart.maxHeartRate || '-';
+        document.getElementById('med-today-heart').textContent = `${min}〜${max} (安静時:${heart.restingHeartRate})`;
+    } else {
+        document.getElementById('med-today-heart').textContent = '-';
+    }
+
+    // 睡眠
+    const sleep = cache.sleep;
+    if (sleep && sleep.totalMinutes) {
+        const h = Math.floor(sleep.totalMinutes / 60);
+        const mins = sleep.totalMinutes % 60;
+        const eff = sleep.efficiency || '-';
+        document.getElementById('med-today-sleep').textContent = `${h}:${String(mins).padStart(2, '0')} (score${eff})`;
+    } else {
+        document.getElementById('med-today-sleep').textContent = '-';
+    }
+
+    // 皮膚温
+    const temp = cache.temperature;
+    if (temp && temp.value !== null && temp.value !== undefined) {
+        const sign = temp.value >= 0 ? '+' : '';
+        document.getElementById('med-today-temp').textContent = `${sign}${temp.value.toFixed(2)}°`;
+    } else {
+        document.getElementById('med-today-temp').textContent = '-';
+    }
+
+    // 月齢
+    const moonAge = getMoonAge(now);
+    const moon = getMoonDisplay(moonAge);
+    document.getElementById('med-today-moon').textContent = `${moon.emoji} ${moon.name}`;
+
+    // 生理予定日
+    updatePeriodDisplay(char);
+}
+
+function updatePeriodDisplay(char) {
+    const ps = char.medicalData.periodSettings;
+    if (!ps || !ps.lastPeriodDate) {
+        document.getElementById('med-today-period').textContent = '未設定';
+        return;
+    }
+    const lastDate = new Date(ps.lastPeriodDate);
+    const cycle = ps.cycleLength || 28;
+    const nextDate = new Date(lastDate);
+    nextDate.setDate(nextDate.getDate() + cycle);
+    const now = new Date();
+    const diffDays = Math.ceil((nextDate - now) / (1000 * 60 * 60 * 24));
+    const nm = nextDate.getMonth() + 1;
+    const nd = nextDate.getDate();
+    document.getElementById('med-today-period').textContent = `${nm}/${nd} (あと${diffDays}日)`;
+}
+
+/** 生理日設定保存 */
+function savePeriodSettings() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    char.medicalData.periodSettings = {
+        lastPeriodDate: document.getElementById('med-period-last').value,
+        cycleLength: parseInt(document.getElementById('med-period-cycle').value) || 28
+    };
+    saveData();
+    updatePeriodDisplay(char);
+    document.getElementById('med-period-panel').style.display = 'none';
+    medLog('生理日設定保存');
+}
+
+// --- カレンダー ---
+function navigateCalendar(direction) {
+    medCalMonth += direction;
+    if (medCalMonth < 0) { medCalMonth = 11; medCalYear--; }
+    if (medCalMonth > 11) { medCalMonth = 0; medCalYear++; }
+
+    // 2ヶ月前まで制限
+    const now = new Date();
+    const minDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const maxDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const calDate = new Date(medCalYear, medCalMonth, 1);
+
+    if (calDate < minDate) { medCalYear = minDate.getFullYear(); medCalMonth = minDate.getMonth(); }
+    if (calDate > maxDate) { medCalYear = maxDate.getFullYear(); medCalMonth = maxDate.getMonth(); }
+
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (char) renderMedCalendar(char);
+
+    // ナビボタンの有効/無効
+    const prevBtn = document.getElementById('btn-med-cal-prev');
+    const nextBtn = document.getElementById('btn-med-cal-next');
+    const prevDate = new Date(medCalYear, medCalMonth - 1, 1);
+    const nextDate2 = new Date(medCalYear, medCalMonth + 1, 1);
+    prevBtn.disabled = prevDate < minDate;
+    nextBtn.disabled = nextDate2 > maxDate;
+}
+
+function renderMedCalendar(char) {
+    const grid = document.getElementById('med-calendar-grid');
+    grid.innerHTML = '';
+    const year = medCalYear;
+    const month = medCalMonth;
+
+    // ラベル
+    document.getElementById('med-cal-month-label').textContent = `${year}年${month + 1}月`;
+
+    // ヘッダー行（日〜土）
+    const headerRow = document.createElement('div');
+    headerRow.className = 'med-cal-header-row';
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    const dayClasses = ['sun', '', '', '', '', '', 'sat'];
+    dayNames.forEach((name, i) => {
+        const cell = document.createElement('div');
+        cell.className = `med-cal-header-cell ${dayClasses[i]}`;
+        cell.textContent = name;
+        headerRow.appendChild(cell);
+    });
+    grid.appendChild(headerRow);
+
+    // ボディ
+    const body = document.createElement('div');
+    body.className = 'med-cal-body';
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+
+    // 生理日計算
+    const periodDays = getPeriodDays(char);
+
+    // 前月の空セル
+    for (let i = 0; i < firstDay; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'med-cal-cell other-month';
+        body.appendChild(cell);
+    }
+
+    // 当月のセル
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(year, month, d);
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dow = dateObj.getDay();
+        const isToday = dateStr === todayStr;
+        const isSat = dow === 6;
+        const isSun = dow === 0;
+        const isHoliday = isJapaneseHoliday(year, month + 1, d);
+
+        const cell = document.createElement('div');
+        cell.className = 'med-cal-cell';
+        if (isToday) cell.classList.add('today');
+        if (isSat) cell.classList.add('sat');
+        if (isSun) cell.classList.add('sun');
+        if (isHoliday) cell.classList.add('holiday');
+
+        // 睡眠品質で背景色
+        const cache = char.medicalData.fitbitCache[dateStr];
+        if (cache && cache.sleep) {
+            const eff = cache.sleep.efficiency || 0;
+            if (eff >= 90) cell.classList.add('sleep-great');
+            else if (eff >= 80) cell.classList.add('sleep-good');
+            else if (eff >= 70) cell.classList.add('sleep-ok');
+            else if (eff >= 60) cell.classList.add('sleep-poor');
+            else if (eff > 0) cell.classList.add('sleep-bad');
+        }
+
+        // 日付
+        const dayEl = document.createElement('div');
+        dayEl.className = 'med-cal-day';
+        dayEl.textContent = d;
+        cell.appendChild(dayEl);
+
+        // 睡眠時間
+        if (cache && cache.sleep && cache.sleep.totalMinutes) {
+            const h = (cache.sleep.totalMinutes / 60).toFixed(1);
+            const sleepEl = document.createElement('div');
+            sleepEl.className = 'med-cal-sleep-time';
+            sleepEl.textContent = `${h}h`;
+            cell.appendChild(sleepEl);
+        }
+
+        // 生理日ドット
+        if (periodDays.has(dateStr)) {
+            const dot = document.createElement('div');
+            dot.className = 'med-cal-period-dot';
+            cell.appendChild(dot);
+        }
+
+        body.appendChild(cell);
+    }
+
+    grid.appendChild(body);
+}
+
+/** 生理予定日・過去日のSet（7日間）を計算 */
+function getPeriodDays(char) {
+    const days = new Set();
+    const ps = char.medicalData.periodSettings;
+    if (!ps || !ps.lastPeriodDate) return days;
+
+    const cycle = ps.cycleLength || 28;
+    const lastDate = new Date(ps.lastPeriodDate);
+    const now = new Date();
+
+    // 過去3サイクル分 + 次の1サイクル分をプロット
+    for (let c = -3; c <= 1; c++) {
+        const cycleStart = new Date(lastDate);
+        cycleStart.setDate(cycleStart.getDate() + c * cycle);
+        for (let d = 0; d < 7; d++) {
+            const day = new Date(cycleStart);
+            day.setDate(day.getDate() + d);
+            days.add(day.toISOString().slice(0, 10));
+        }
+    }
+    return days;
+}
+
+// --- 診察タブ機能切替 ---
+function switchConsultMode(mode) {
+    medCurrentConsult = mode;
+    // ボタンのactive切替
+    document.querySelectorAll('.med-consult-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-consult') === mode);
+    });
+
+    const content = document.getElementById('med-consultation-content');
+    content.innerHTML = '';
+
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+
+    switch (mode) {
+        case 'analysis': renderAnalysisView(char, content); break;
+        case 'chat': renderChatView(char, content); break;
+        case 'karte': renderKarteView(char, content); break;
+        case 'logs': renderMedLogsView(char, content); break;
+    }
+}
+
+// --- 分析機能 ---
+function renderAnalysisView(char, container) {
+    const header = document.createElement('div');
+    header.className = 'med-analysis-header';
+    header.innerHTML = `<h3 style="color:#fff; font-size:0.95rem;">📊 健康分析</h3>`;
+    const updateBtn = document.createElement('button');
+    updateBtn.className = 'med-refresh-btn';
+    updateBtn.textContent = '🔄';
+    updateBtn.title = '分析を更新';
+    updateBtn.onclick = () => runAnalysis(char);
+    header.appendChild(updateBtn);
+    container.appendChild(header);
+
+    // 最新の分析結果表示
+    if (char.medicalData.analysisResults.length > 0) {
+        const latest = char.medicalData.analysisResults[char.medicalData.analysisResults.length - 1];
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'med-analysis-result';
+        resultDiv.innerHTML = `<div class="med-analysis-date">${formatDate(latest.date)} (${latest.modelUsed || ''})</div>${escapeHtml(latest.content)}`;
+        container.appendChild(resultDiv);
+    } else {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'med-karte-empty';
+        emptyDiv.textContent = 'まだ分析結果がありません。🔄ボタンで分析を実行してください。';
+        container.appendChild(emptyDiv);
+    }
+}
+
+async function runAnalysis(char) {
+    if (isMedBusy) return;
+    if (!AppState.apiKey) { alert('APIキーを設定してください。'); return; }
+
+    isMedBusy = true;
+    const content = document.getElementById('med-consultation-content');
+    content.innerHTML = '<div class="med-consultation-welcome"><p>分析中...</p></div>';
+
+    try {
+        // 直近48時間のデータを収集
+        const data48h = getLast48HoursData(char);
+        const karteText = char.medicalData.karte || '（カルテ未作成）';
+
+        const systemPrompt = buildMedicalSystemPrompt(char, 'analysis');
+        const userMsg = `【直近48時間のFitbitデータ】\n${JSON.stringify(data48h, null, 1)}\n\n【カルテ】\n${karteText}\n\n上記のデータを分析し、ユーザの健康状態についてアドバイスしてください。また、カルテに追記すべき情報があれば、以下のJSON形式で最後に出力してください。カルテ更新不要の場合は出力不要です。\n[KARTE_UPDATE]更新内容[/KARTE_UPDATE]`;
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${AppState.medAnalysisModel}:generateContent?key=${AppState.apiKey}`;
+        const response = await fetchWithTimeout(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+                generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const respData = await response.json();
+        let analysisText = respData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+        // カルテ更新チェック
+        const karteMatch = analysisText.match(/\[KARTE_UPDATE\]([\s\S]*?)\[\/KARTE_UPDATE\]/);
+        if (karteMatch) {
+            const newKarte = karteMatch[1].trim();
+            if (newKarte) {
+                char.medicalData.karte += `\n[${new Date().toLocaleDateString('ja-JP')}] ${newKarte}`;
+                medLog('カルテ自動更新');
+            }
+            analysisText = analysisText.replace(/\[KARTE_UPDATE\][\s\S]*?\[\/KARTE_UPDATE\]/, '').trim();
+        }
+
+        // 結果保存
+        char.medicalData.analysisResults.push({
+            date: new Date().toISOString(),
+            content: analysisText,
+            modelUsed: AppState.medAnalysisModel
+        });
+        char.medicalData.lastAnalysisDate = new Date().toISOString().slice(0, 10);
+
+        // 60回超えたら最古30回を要約圧縮
+        if (char.medicalData.analysisResults.length > 60) {
+            const old30 = char.medicalData.analysisResults.splice(0, 30);
+            const summaryText = old30.map(a => `[${formatDate(a.date)}] ${a.content.substring(0, 200)}`).join('\n');
+            char.medicalData.analysisResults.unshift({
+                date: new Date().toISOString(),
+                content: `【過去分析の要約】\n${summaryText.substring(0, 2000)}`,
+                modelUsed: 'summary'
+            });
+            medLog('分析結果要約圧縮実行');
+        }
+
+        saveData();
+        switchConsultMode('analysis'); // 再描画
+
+    } catch (e) {
+        medLog('分析エラー:', e.message);
+        content.innerHTML = `<div class="med-consultation-welcome"><p>分析に失敗しました: ${escapeHtml(e.message)}</p></div>`;
+    } finally {
+        isMedBusy = false;
+    }
+}
+
+function getLast48HoursData(char) {
+    const result = {};
+    const now = new Date();
+    for (let i = 0; i < 3; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        if (char.medicalData.fitbitCache[dateStr]) {
+            result[dateStr] = char.medicalData.fitbitCache[dateStr];
+        }
+    }
+    return result;
+}
+
+// --- 相談機能 ---
+function renderChatView(char, container) {
+    container.innerHTML = '';
+    const chatArea = document.createElement('div');
+    chatArea.className = 'med-chat-area';
+
+    const messagesDiv = document.createElement('div');
+    messagesDiv.className = 'med-chat-messages';
+    messagesDiv.id = 'med-chat-messages';
+
+    // 既存チャットログ表示
+    char.medicalData.chatLogs.forEach(log => {
+        const msg = document.createElement('div');
+        msg.className = `med-chat-msg ${log.role === 'user' ? 'user' : (log.role === 'system' ? 'system' : 'ai')}`;
+        msg.textContent = log.text;
+        messagesDiv.appendChild(msg);
+    });
+
+    const inputArea = document.createElement('div');
+    inputArea.className = 'med-chat-input-area';
+    const input = document.createElement('textarea');
+    input.className = 'med-chat-input';
+    input.id = 'med-chat-input';
+    input.placeholder = '相談内容を入力...';
+    input.rows = 1;
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'send-btn';
+    sendBtn.textContent = '➤';
+    sendBtn.onclick = () => sendMedChat(char);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMedChat(char); }
+    });
+
+    inputArea.appendChild(input);
+    inputArea.appendChild(sendBtn);
+    chatArea.appendChild(messagesDiv);
+    chatArea.appendChild(inputArea);
+    container.appendChild(chatArea);
+
+    // スクロールを最下部に
+    requestAnimationFrame(() => { messagesDiv.scrollTop = messagesDiv.scrollHeight; });
+}
+
+async function sendMedChat(char) {
+    if (isMedBusy) return;
+    const input = document.getElementById('med-chat-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    if (!AppState.apiKey) { alert('APIキーを設定してください。'); return; }
+
+    isMedBusy = true;
+    input.value = '';
+    input.disabled = true;
+
+    // ユーザメッセージ追加
+    char.medicalData.chatLogs.push({ role: 'user', text, timestamp: new Date().toISOString(), source: 'medical' });
+    // Room側ログにも追加(共有)
+    char.roomLogs.push({ role: 'user', text, timestamp: new Date().toISOString(), source: 'medical' });
+    saveData();
+
+    // UI更新
+    const messagesDiv = document.getElementById('med-chat-messages');
+    const userMsg = document.createElement('div');
+    userMsg.className = 'med-chat-msg user';
+    userMsg.textContent = text;
+    messagesDiv.appendChild(userMsg);
+
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'med-chat-msg ai';
+    loadingMsg.textContent = 'thinking...';
+    loadingMsg.id = 'med-chat-loading';
+    messagesDiv.appendChild(loadingMsg);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    try {
+        const systemPrompt = buildMedicalSystemPrompt(char, 'chat');
+        
+        // 会話履歴（直近20件）
+        const recentChat = char.medicalData.chatLogs.slice(-20);
+        const contents = recentChat.map(l => ({
+            role: l.role === 'user' ? 'user' : 'model',
+            parts: [{ text: l.text }]
+        }));
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${AppState.medChatModel}:generateContent?key=${AppState.apiKey}`;
+        const response = await fetchWithTimeout(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const respData = await response.json();
+        let aiText = respData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '（返答なし）';
+
+        // カルテ更新チェック
+        const karteMatch = aiText.match(/\[KARTE_UPDATE\]([\s\S]*?)\[\/KARTE_UPDATE\]/);
+        if (karteMatch) {
+            const newKarte = karteMatch[1].trim();
+            if (newKarte) {
+                char.medicalData.karte += `\n[${new Date().toLocaleDateString('ja-JP')}] ${newKarte}`;
+                medLog('カルテ自動更新(相談経由)');
+            }
+            aiText = aiText.replace(/\[KARTE_UPDATE\][\s\S]*?\[\/KARTE_UPDATE\]/, '').trim();
+        }
+
+        // AIメッセージ保存
+        char.medicalData.chatLogs.push({ role: 'model', text: aiText, timestamp: new Date().toISOString(), source: 'medical' });
+        char.roomLogs.push({ role: 'model', text: aiText, timestamp: new Date().toISOString(), source: 'medical' });
+        saveData();
+
+        // UI更新
+        const loading = document.getElementById('med-chat-loading');
+        if (loading) loading.remove();
+        const aiMsg = document.createElement('div');
+        aiMsg.className = 'med-chat-msg ai';
+        aiMsg.textContent = aiText;
+        messagesDiv.appendChild(aiMsg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    } catch (e) {
+        medLog('相談エラー:', e.message);
+        const loading = document.getElementById('med-chat-loading');
+        if (loading) loading.textContent = `エラー: ${e.message}`;
+    } finally {
+        isMedBusy = false;
+        input.disabled = false;
+    }
+}
+
+// --- カルテ表示 ---
+function renderKarteView(char, container) {
+    const header = document.createElement('h3');
+    header.style.cssText = 'color:#fff; font-size:0.95rem; margin-bottom:10px;';
+    header.textContent = '📋 カルテ';
+    container.appendChild(header);
+
+    if (char.medicalData.karte) {
+        const karteDiv = document.createElement('div');
+        karteDiv.className = 'med-karte-content';
+        karteDiv.textContent = char.medicalData.karte;
+        container.appendChild(karteDiv);
+    } else {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'med-karte-empty';
+        emptyDiv.textContent = 'カルテはまだ作成されていません。\n分析や相談を行うと、AIが自動的に記録を残します。';
+        container.appendChild(emptyDiv);
+    }
+}
+
+// --- ログ表示 ---
+function renderMedLogsView(char, container) {
+    // タブ
+    const tabContainer = document.createElement('div');
+    tabContainer.className = 'med-log-tabs';
+    ['all', 'room', 'medical'].forEach(type => {
+        const tab = document.createElement('button');
+        tab.className = 'med-log-tab';
+        tab.textContent = type === 'all' ? 'All' : type === 'room' ? 'Room' : '診察';
+        tab.dataset.logType = type;
+        if (type === 'all') tab.classList.add('active');
+        tab.onclick = () => {
+            tabContainer.querySelectorAll('.med-log-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            renderMedLogEntries(char, logsArea, type);
+        };
+        tabContainer.appendChild(tab);
+    });
+    container.appendChild(tabContainer);
+
+    const logsArea = document.createElement('div');
+    logsArea.id = 'med-logs-area';
+    container.appendChild(logsArea);
+    renderMedLogEntries(char, logsArea, 'all');
+}
+
+function renderMedLogEntries(char, container, filter) {
+    container.innerHTML = '';
+
+    // RoomログとMedログを統合
+    const allLogs = [];
+    char.roomLogs.forEach(l => {
+        allLogs.push({ ...l, source: l.source || 'room' });
+    });
+    // medicalData.chatLogsのうちroomLogsに既に追加されていないものがあれば追加（重複回避は timestampで）
+    // → 現在の設計では roomLogs に都度 push しているので重複問題は無し
+
+    // フィルタ
+    let filtered = allLogs;
+    if (filter === 'room') filtered = allLogs.filter(l => l.source !== 'medical');
+    if (filter === 'medical') filtered = allLogs.filter(l => l.source === 'medical');
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="med-karte-empty">ログはありません。</div>';
+        return;
+    }
+
+    // 最新から表示
+    [...filtered].reverse().slice(0, 100).forEach(log => {
+        const entry = document.createElement('div');
+        entry.className = 'med-log-entry';
+        const roleName = log.role === 'user' ? 'ユーザ' : (log.role === 'system' ? 'システム' : char.name);
+        const sourceClass = log.source === 'medical' ? 'medical' : 'room';
+        const sourceLabel = log.source === 'medical' ? '診察' : 'Room';
+        entry.innerHTML = `<div class="med-log-meta">${escapeHtml(roleName)} (${formatDate(log.timestamp)}) <span class="med-log-source ${sourceClass}">${sourceLabel}</span></div><div>${escapeHtml(log.text)}</div>`;
+        container.appendChild(entry);
+    });
+}
+
+// --- 診察用システムプロンプト構築 ---
+function buildMedicalSystemPrompt(char, mode) {
+    let prompt = char.prompt || 'You are a helpful assistant.';
+
+    // メモリ
+    const charMemories = AppState.memories.filter(m => m.charId === char.id);
+    if (charMemories.length > 0) {
+        prompt += '\n\n【キャラクターの記憶（メモリ）】\n';
+        charMemories.forEach(m => { prompt += `- [${formatDate(m.createdAt)}] ${m.content}\n`; });
+    }
+
+    prompt += '\n\n【あなたの役割：診察ルーム】\nあなたは今、診察ルームにいます。ユーザの健康データを元に、健康アドバイスや体調相談に応じてください。\nあなたのキャラクター性格を維持しつつ、健康面に関して真摯に対応してください。';
+
+    // データ情報
+    const data48h = getLast48HoursData(char);
+    prompt += `\n\n【直近48時間のFitbitデータ】\n${JSON.stringify(data48h, null, 1)}`;
+
+    // カルテ
+    if (char.medicalData.karte) {
+        prompt += `\n\n【カルテ】\n${char.medicalData.karte}`;
+    }
+
+    // Roomでの直近20ログ
+    const recentRoomLogs = char.roomLogs.slice(-20);
+    if (recentRoomLogs.length > 0) {
+        prompt += '\n\n【通常Roomでの直近20件の会話】\n';
+        recentRoomLogs.forEach(l => {
+            const role = l.role === 'user' ? 'ユーザ' : (l.role === 'system' ? 'システム' : char.name);
+            const src = l.source === 'medical' ? '(診察)' : '(Room)';
+            prompt += `[${role}${src} ${formatDate(l.timestamp)}] ${l.text}\n`;
+        });
+    }
+
+    // 分析結果（直近24時間以内のもの）
+    if (mode === 'chat') {
+        const now = new Date();
+        const recent = char.medicalData.analysisResults.filter(a => {
+            const diff = now - new Date(a.date);
+            return diff < 24 * 60 * 60 * 1000;
+        });
+        if (recent.length > 0) {
+            prompt += '\n\n【直近24時間の分析結果】\n';
+            recent.forEach(a => { prompt += `[${formatDate(a.date)}] ${a.content}\n`; });
+        }
+    }
+
+    prompt += `\n\n【指示】
+- ユーザの健康に関わる話（腹痛、頭痛など）が出たら、Fitbitデータやカルテ情報から要因分析を行ってください。
+- 要因候補（食べ物、行動、環境など）をヒアリングし、有用な情報はカルテに記録してください。
+- カルテに記録すべき情報がある場合は、回答の最後に [KARTE_UPDATE]記録内容[/KARTE_UPDATE] を付与してください。通常の回答にはこのタグを含めないでください。
+- 現在日時: ${getDatetimeString() || new Date().toLocaleString('ja-JP')}`;
+
+    return prompt;
+}
+
+/** 診察ルーム初期化（popstateから呼ばれる） */
+function initMedicalRoom() {
+    const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+    if (!char) return;
+    ensureRoomData(char);
+    const now = new Date();
+    medCalYear = now.getFullYear();
+    medCalMonth = now.getMonth();
+    renderMedCalendar(char);
+    updateTodaySummary(char);
+    loadMedConsultationBg(char);
+}
+
+// ============================================================
+// 12. INITIALIZATION
 // ============================================================
 async function init() {
     await requestPersistentStorage();

@@ -1,5 +1,5 @@
 // Service Worker (PWA)
-const CACHE_NAME = 'antigravity-chat-v6'; // バージョンアップでキャッシュを強制リセット
+const CACHE_NAME = 'antigravity-chat-v7'; // バージョンアップでキャッシュを強制リセット
 const urlsToCache = [
     './',
     './index.html',
@@ -33,6 +33,12 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+    // 外部ドメイン（GASやGemini APIなど）へのリクエストはService Workerを通さず直接ネットワークへ
+    // これにより、CORSエラーやリダイレクトによるネットワークエラーを回避します
+    if (!event.request.url.startsWith(self.location.origin)) {
+        return; 
+    }
+
     // ネットワークファースト (Network First) 戦略
     // 常に最新のファイルを取りに行き、スマホでも更新が即座に反映されるようにする
     event.respondWith(

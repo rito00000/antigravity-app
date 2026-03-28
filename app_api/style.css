@@ -1228,3 +1228,672 @@ input[type="password"] {
     border-radius: 20px;
     border: 1px solid rgba(100, 180, 255, 0.25);
 }
+
+/* ===== 診察ルーム遷移ボタン (Room画面上) ===== */
+.medical-room-shortcut-btn {
+    position: absolute;
+    top: calc(var(--safe-top) + 190px);
+    right: 37px;
+    width: 48px;
+    height: 48px;
+    z-index: 5;
+    border-radius: 50%;
+    background: rgba(167, 139, 250, 0.25);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    color: #fff;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    box-shadow: 0 2px 12px rgba(167, 139, 250, 0.2);
+}
+
+.medical-room-shortcut-btn:active {
+    transform: scale(0.9);
+    background: rgba(167, 139, 250, 0.45);
+}
+
+/* ===== 診察ルーム画面 ===== */
+#medical-room-view {
+    background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ヘッダー */
+.med-header {
+    height: 52px;
+    min-height: 52px;
+    background: linear-gradient(135deg, #1a1525 0%, #0f1a2e 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 4px;
+}
+
+.med-tabs {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+}
+
+.med-tab {
+    flex: 1;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.med-tab.active {
+    color: var(--accent-color);
+    background: rgba(167, 139, 250, 0.12);
+    border-color: rgba(167, 139, 250, 0.3);
+}
+
+/* タブコンテンツ */
+.med-tab-content {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    position: relative;
+}
+
+.med-tab-content.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 下部タブバー */
+.med-bottom-tabs {
+    display: flex;
+    border-top: 1px solid var(--border-color);
+    background: linear-gradient(to top, var(--surface-color) 0%, rgba(24, 24, 24, 0.95) 100%);
+    padding: 4px 0 calc(4px + var(--safe-bottom));
+    flex-shrink: 0;
+}
+
+.med-bottom-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s;
+    border: none;
+    background: none;
+}
+
+.med-bottom-tab span {
+    font-size: 0.65rem;
+}
+
+.med-bottom-tab.active {
+    color: var(--accent-color);
+}
+
+/* ===== 今日のサマリー ===== */
+.med-today-summary {
+    padding: 12px 14px 8px;
+    background: linear-gradient(135deg, rgba(30, 25, 50, 0.9) 0%, rgba(15, 26, 46, 0.9) 100%);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.med-today-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#med-today-date {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.med-refresh-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    color: var(--accent-color);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.med-refresh-btn:active {
+    transform: rotate(180deg);
+}
+
+.med-refresh-btn.spinning {
+    animation: medSpin 1s linear infinite;
+}
+
+@keyframes medSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.med-today-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.med-today-item {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.med-today-item:first-child {
+    grid-column: 1 / -1;
+}
+
+.med-today-label {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+.med-today-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ===== 生理日設定 ===== */
+.med-period-settings {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.med-period-toggle-btn {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255, 100, 130, 0.1);
+    border: 1px solid rgba(255, 100, 130, 0.25);
+    border-radius: 8px;
+    color: #ff8090;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.med-period-toggle-btn:active {
+    background: rgba(255, 100, 130, 0.2);
+}
+
+.med-period-panel {
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.med-period-panel label {
+    margin-top: 8px;
+}
+
+.med-period-panel input[type="date"],
+.med-period-panel input[type="number"] {
+    width: 100%;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+/* ===== カレンダー ===== */
+.med-calendar-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+}
+
+.med-cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.med-cal-nav-btn:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.med-cal-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.med-cal-month-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.med-calendar-grid {
+    padding: 0 10px 16px;
+}
+
+.med-cal-header-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.med-cal-header-cell {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    font-weight: 600;
+}
+
+.med-cal-header-cell.sat {
+    color: #6b9fff;
+}
+
+.med-cal-header-cell.sun {
+    color: #ff7b7b;
+}
+
+.med-cal-body {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.med-cal-cell {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    padding: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    font-size: 0.72rem;
+    position: relative;
+    border: 1px solid transparent;
+    min-height: 42px;
+}
+
+.med-cal-cell.today {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 6px rgba(167, 139, 250, 0.3);
+}
+
+.med-cal-cell.other-month {
+    opacity: 0.3;
+}
+
+.med-cal-day {
+    font-weight: 600;
+    font-size: 0.7rem;
+    line-height: 1;
+    margin-top: 1px;
+}
+
+.med-cal-cell.sat .med-cal-day {
+    color: #6b9fff;
+}
+
+.med-cal-cell.sun .med-cal-day,
+.med-cal-cell.holiday .med-cal-day {
+    color: #ff7b7b;
+}
+
+.med-cal-sleep-time {
+    font-size: 0.55rem;
+    color: rgba(255, 255, 255, 0.7);
+    position: absolute;
+    bottom: 1px;
+    left: 2px;
+}
+
+.med-cal-period-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ff6b8a;
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+}
+
+/* 睡眠品質カラー（セル背景） */
+.med-cal-cell.sleep-great { background: rgba(30, 60, 120, 0.5); }
+.med-cal-cell.sleep-good { background: rgba(40, 80, 140, 0.4); }
+.med-cal-cell.sleep-ok { background: rgba(100, 100, 50, 0.35); }
+.med-cal-cell.sleep-poor { background: rgba(160, 80, 30, 0.35); }
+.med-cal-cell.sleep-bad { background: rgba(160, 40, 40, 0.35); }
+
+/* ===== 診察画面 ===== */
+.med-consultation-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+}
+
+.med-consultation-overlay {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.med-consultation-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    min-height: 0;
+}
+
+.med-consultation-welcome {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.med-consultation-nav {
+    display: flex;
+    gap: 5px;
+    padding: 10px 12px calc(8px + var(--safe-bottom));
+    background: rgba(0, 0, 0, 0.7);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.med-consult-btn {
+    flex: 1;
+    padding: 8px 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #ddd;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.med-consult-btn:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.med-consult-btn.active {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: rgba(167, 139, 250, 0.15);
+}
+
+/* 分析結果表示 */
+.med-analysis-result {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    color: #fff;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.med-analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.med-analysis-date {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+/* 相談チャット */
+.med-chat-area {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.med-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+}
+
+.med-chat-input-area {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    align-items: flex-end;
+    flex-shrink: 0;
+}
+
+.med-chat-input {
+    flex-grow: 1;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: none;
+    max-height: 80px;
+    min-height: 38px;
+}
+
+.med-chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.med-chat-msg {
+    padding: 10px 14px;
+    border-radius: 16px;
+    animation: msgFadeIn 0.25s ease-out;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 88%;
+}
+
+.med-chat-msg.user {
+    align-self: flex-end;
+    background: rgba(42, 43, 77, 0.7);
+    backdrop-filter: blur(4px);
+    border-bottom-right-radius: 4px;
+    color: #fff;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.med-chat-msg.ai {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(4px);
+    border-bottom-left-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.med-chat-msg.system {
+    align-self: center;
+    background: rgba(255, 200, 0, 0.08);
+    border: 1px solid rgba(255, 200, 0, 0.15);
+    color: #ccc;
+    font-size: 0.78rem;
+    max-width: 95%;
+}
+
+/* カルテ表示 */
+.med-karte-content {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px;
+    color: #fff;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    min-height: 200px;
+}
+
+.med-karte-empty {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 0.9rem;
+}
+
+/* ログ表示 */
+.med-log-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.med-log-tab {
+    flex: 1;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #aaa;
+    cursor: pointer;
+    text-align: center;
+}
+
+.med-log-tab.active {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: rgba(167, 139, 250, 0.12);
+}
+
+.med-log-entry {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.85rem;
+    color: #ddd;
+}
+
+.med-log-entry:last-child {
+    border-bottom: none;
+}
+
+.med-log-meta {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.med-log-source {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+}
+
+.med-log-source.room {
+    background: rgba(100, 200, 255, 0.2);
+    color: #8df;
+}
+
+.med-log-source.medical {
+    background: rgba(167, 139, 250, 0.2);
+    color: var(--accent-color);
+}
+
+/* Coming Soon */
+.med-coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.med-coming-soon-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.med-coming-soon h3 {
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.med-coming-soon p {
+    font-size: 0.85rem;
+    line-height: 1.6;
+}

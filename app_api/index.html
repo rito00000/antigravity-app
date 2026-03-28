@@ -134,6 +134,8 @@
 
                 <button id="btn-open-context-settings" class="secondary-btn full-width margin-top">📱
                     送信する端末情報設定</button>
+                <button id="btn-open-medical-room-settings" class="secondary-btn full-width margin-top">🩺
+                    診察Room設定</button>
 
                 <button id="btn-save-char" class="primary-btn full-width margin-top">保存</button>
                 <button id="btn-delete-char" class="danger-btn full-width margin-top">このキャラを削除</button>
@@ -208,7 +210,7 @@
                 <button id="btn-close-global-settings" class="icon-btn">✖</button>
             </header>
             <div class="content-area padding-area">
-                <div class="version-badge">20260328 rev.1</div>
+                <div class="version-badge">20260329 rev.1</div>
                 <label for="api-key-input">Gemini APIキー</label>
                 <input type="password" id="api-key-input" placeholder="AIzaSy...">
                 <p class="help-text">キーはブラウザ内にのみ保存されます。</p>
@@ -256,6 +258,17 @@
                 </div>
 
                 <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
+                <button id="btn-open-model-settings" class="secondary-btn full-width">🤖 モデル設定画面</button>
+
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
+                <label>Fitbit連携</label>
+                <label for="fitbit-gas-url-input">GAS Web App URL</label>
+                <input type="text" id="fitbit-gas-url-input" placeholder="https://script.google.com/macros/s/...">
+                <label for="fitbit-secret-input">Fitbit連携パスワード</label>
+                <input type="password" id="fitbit-secret-input" placeholder="GAS側のAPP_SECRET_TOKENと同じ値">
+                <p class="help-text">GASのスクリプトプロパティ「APP_SECRET_TOKEN」と同じ値を入力してください。</p>
+
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 20px 0;">
                 <p class="help-text">すべてのキャラクターのチャット履歴をZIP形式で出力します。</p>
                 <button id="btn-export-all" class="secondary-btn full-width margin-top">全ログZIP一括出力</button>
 
@@ -277,6 +290,10 @@
                 <div id="room-weather-temp" class="room-w-temp"></div>
                 <div id="room-weather-prob" class="room-w-prob"></div>
             </div>
+            <!-- 診察ルーム遷移ボタン -->
+            <button id="btn-open-medical-room" class="medical-room-shortcut-btn" title="診察ルーム">
+                🩺
+            </button>
             <div id="room-char-layer" class="room-layer"></div>
 
             <!-- currentActivity表示 -->
@@ -471,6 +488,220 @@
                 </div>
 
                 <button id="btn-save-room-settings" class="primary-btn full-width margin-top">保存して戻る</button>
+            </div>
+        </div>
+
+        <!-- ===== モデル設定画面 ===== -->
+        <div id="model-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>🤖 モデル設定</h2>
+                <button id="btn-close-model-settings" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <label>会話用モデル（※無料枠あり）</label>
+                <div class="radio-group" style="padding-bottom:16px;">
+                    <label>
+                        <input type="radio" name="mdlModelType" value="select" checked> リストから選択
+                    </label>
+                    <select id="mdl-model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="mdlModelType" value="custom"> 自由入力
+                    </label>
+                    <input type="text" id="mdl-model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box;" disabled>
+                </div>
+
+                <label>room用モデル</label>
+                <div class="radio-group" style="padding-bottom:16px;">
+                    <label>
+                        <input type="radio" name="mdlRoomModelType" value="select" checked> リストから選択
+                    </label>
+                    <select id="mdl-room-model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview (デフォルト)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="mdlRoomModelType" value="custom"> 自由入力
+                    </label>
+                    <input type="text" id="mdl-room-model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box;" disabled>
+                </div>
+
+                <label>診察ルーム 分析用モデル</label>
+                <div class="radio-group" style="padding-bottom:16px;">
+                    <label>
+                        <input type="radio" name="mdlMedAnalysisModelType" value="select" checked> リストから選択
+                    </label>
+                    <select id="mdl-med-analysis-model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (デフォルト)</option>
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="mdlMedAnalysisModelType" value="custom"> 自由入力
+                    </label>
+                    <input type="text" id="mdl-med-analysis-model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box;" disabled>
+                </div>
+
+                <label>診察ルーム 相談用モデル</label>
+                <div class="radio-group" style="padding-bottom:16px;">
+                    <label>
+                        <input type="radio" name="mdlMedChatModelType" value="select" checked> リストから選択
+                    </label>
+                    <select id="mdl-med-chat-model-select"
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box; background-color: var(--surface-color); color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 8px; font-size: 1rem; font-family: inherit;">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (デフォルト)</option>
+                        <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    </select>
+                    <label style="margin-top:10px;">
+                        <input type="radio" name="mdlMedChatModelType" value="custom"> 自由入力
+                    </label>
+                    <input type="text" id="mdl-med-chat-model-input" placeholder="モデル名を入力..."
+                        style="margin-left:24px; width:calc(100% - 24px); box-sizing:border-box;" disabled>
+                </div>
+
+                <button id="btn-save-model-settings" class="primary-btn full-width margin-top">保存して戻る</button>
+            </div>
+        </div>
+
+        <!-- ===== 診察ルーム画面 ===== -->
+        <div id="medical-room-view" class="view">
+            <!-- 上部タブ -->
+            <header class="med-header">
+                <button id="btn-back-from-medical" class="icon-btn" style="color:#fff; text-shadow:0 1px 4px rgba(0,0,0,0.8);">◀</button>
+                <div class="med-tabs">
+                    <button class="med-tab active" data-med-tab="calendar">📅 カレンダー</button>
+                    <button class="med-tab" data-med-tab="consultation">🩺 診察</button>
+                    <button class="med-tab" data-med-tab="detail">📊 詳細データ</button>
+                </div>
+            </header>
+
+            <!-- カレンダータブ -->
+            <div id="med-tab-calendar" class="med-tab-content active">
+                <div class="med-today-summary">
+                    <div class="med-today-header">
+                        <span id="med-today-date">-</span>
+                        <button id="btn-med-refresh" class="med-refresh-btn" title="手動更新">🔄</button>
+                    </div>
+                    <div class="med-today-grid">
+                        <div class="med-today-item">
+                            <span class="med-today-label">次回生理予定日</span>
+                            <span id="med-today-period" class="med-today-value">-</span>
+                        </div>
+                        <div class="med-today-item">
+                            <span class="med-today-label">皮膚温変動</span>
+                            <span id="med-today-temp" class="med-today-value">-</span>
+                        </div>
+                        <div class="med-today-item">
+                            <span class="med-today-label">心拍</span>
+                            <span id="med-today-heart" class="med-today-value">-</span>
+                        </div>
+                        <div class="med-today-item">
+                            <span class="med-today-label">睡眠</span>
+                            <span id="med-today-sleep" class="med-today-value">-</span>
+                        </div>
+                        <div class="med-today-item">
+                            <span class="med-today-label">月齢</span>
+                            <span id="med-today-moon" class="med-today-value">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 生理日設定 -->
+                <div class="med-period-settings">
+                    <button id="btn-med-period-toggle" class="med-period-toggle-btn">🩸 生理日設定</button>
+                    <div id="med-period-panel" class="med-period-panel" style="display:none;">
+                        <label for="med-period-last">最終生理開始日</label>
+                        <input type="date" id="med-period-last">
+                        <label for="med-period-cycle">周期（日）</label>
+                        <input type="number" id="med-period-cycle" value="28" min="20" max="45">
+                        <button id="btn-med-period-save" class="primary-btn full-width margin-top">保存</button>
+                    </div>
+                </div>
+
+                <!-- カレンダー -->
+                <div class="med-calendar-nav">
+                    <button id="btn-med-cal-prev" class="med-cal-nav-btn">◀</button>
+                    <span id="med-cal-month-label" class="med-cal-month-label">-</span>
+                    <button id="btn-med-cal-next" class="med-cal-nav-btn">▶</button>
+                </div>
+                <div id="med-calendar-grid" class="med-calendar-grid">
+                    <!-- JSで描画 -->
+                </div>
+            </div>
+
+            <!-- 診察タブ -->
+            <div id="med-tab-consultation" class="med-tab-content">
+                <div id="med-consultation-bg" class="med-consultation-bg"></div>
+                <div class="med-consultation-overlay">
+                    <div id="med-consultation-content" class="med-consultation-content">
+                        <!-- 分析/相談/カルテ/ログの内容がここに入る -->
+                        <div class="med-consultation-welcome">
+                            <p>下のボタンから機能を選んでください。</p>
+                        </div>
+                    </div>
+                    <div class="med-consultation-nav">
+                        <button class="med-consult-btn" data-consult="analysis">📊 分析</button>
+                        <button class="med-consult-btn" data-consult="chat">💬 相談</button>
+                        <button class="med-consult-btn" data-consult="karte">📋 カルテ</button>
+                        <button class="med-consult-btn" data-consult="logs">📝 ログ</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 詳細データタブ -->
+            <div id="med-tab-detail" class="med-tab-content">
+                <div class="med-coming-soon">
+                    <div class="med-coming-soon-icon">📊</div>
+                    <h3>Coming Soon</h3>
+                    <p>詳細データの表示機能は現在開発中です。<br>週間グラフなどの表示を予定しています。</p>
+                </div>
+            </div>
+
+            <!-- 下部タブ（モバイル向け） -->
+            <div class="med-bottom-tabs">
+                <button class="med-bottom-tab active" data-med-tab="calendar">📅<span>カレンダー</span></button>
+                <button class="med-bottom-tab" data-med-tab="consultation">🩺<span>診察</span></button>
+                <button class="med-bottom-tab" data-med-tab="detail">📊<span>詳細</span></button>
+            </div>
+        </div>
+
+        <!-- ===== 診察ルーム設定画面 ===== -->
+        <div id="medical-room-settings-view" class="view modal-view">
+            <header class="app-header modal-header">
+                <h2>🩺 診察Room設定</h2>
+                <button id="btn-close-medical-room-settings" class="icon-btn">✖</button>
+            </header>
+            <div class="content-area padding-area">
+                <h3 style="font-size:0.95rem; margin-bottom:8px;">診察ルーム背景画像</h3>
+                <p class="help-text">推奨: 縦長画像 (9:16)。診察ルームの背景として使用されます。</p>
+                <div class="room-img-upload-group">
+                    <div class="room-img-slot" data-key="medBg" data-aspect="0.5625" data-label="診察室">
+                        <div class="room-img-preview" id="preview-medBg"></div>
+                        <span class="room-img-label">🩺 背景</span>
+                        <input type="file" accept="image/*" class="room-img-file-input" style="display:none;">
+                        <button class="room-img-delete-btn" title="削除" style="display:none;">✕</button>
+                    </div>
+                </div>
+                <button id="btn-save-medical-room-settings" class="primary-btn full-width margin-top">保存して戻る</button>
             </div>
         </div>
 
