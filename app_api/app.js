@@ -868,7 +868,7 @@ function setupEventListeners() {
             sendBattery: document.getElementById('ctx-battery').checked,
             contextInstruction: document.getElementById('ctx-instruction-input').value.trim()
         };
-        showView('charSettings');
+        history.back();
     };
 
     // --- Global Settings ---
@@ -1106,7 +1106,7 @@ function setupEventListeners() {
     };
     document.getElementById('btn-close-medical-room-settings').onclick = () => history.back();
     document.getElementById('btn-save-medical-room-settings').onclick = () => {
-        showView('charSettings');
+        history.back();
     };
     // モデル設定画面
     document.getElementById('btn-open-model-settings').onclick = () => {
@@ -1159,23 +1159,13 @@ function setupEventListeners() {
             } else if (target.id === 'btn-save-global') {
                 // --- 保存処理 ---
                 AppState.apiKey = document.getElementById('api-key-input').value.trim();
-                const getModelVal = (prefix, radioName) => {
-                    const radioSel = document.querySelector(`input[name="${radioName}"]:checked`);
-                    if (!radioSel) return '';
-                    const isSelect = radioSel.value === 'select';
-                    return isSelect ? document.getElementById(`${prefix}select`).value : document.getElementById(`${prefix}input`).value.trim();
-                };
-                const mVal = getModelVal('model-', 'modelType');
-                if (mVal) AppState.model = mVal;
-                const rVal = getModelVal('room-model-', 'roomModelType');
-                if (rVal) AppState.roomModel = rVal;
                 
                 // Fitbit設定
                 AppState.fitbitGasUrl = document.getElementById('fitbit-gas-url-input').value.trim();
                 AppState.fitbitSecret = document.getElementById('fitbit-secret-input').value.trim();
                 
                 saveData();
-                showView('main');
+                history.back();
             } else if (target.id === 'btn-close-global-settings') {
                 history.back();
             }
@@ -3188,8 +3178,7 @@ function exitMedicalRoom() {
         });
         saveData();
     }
-    showView('room');
-    if (char) updateRoomVisuals(char);
+    history.back();
     medLog('診察ルームから通常Roomへ戻り');
 }
 
@@ -3539,6 +3528,14 @@ function renderMedCalendar(char) {
     grid.appendChild(body);
 }
 
+/** 指定日付のローカル時刻に基づく YYYY-MM-DD 形式の文字列を取得 */
+function getLocalYMD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 /** 生理予定日・過去日のSet（7日間）を計算 */
 function getPeriodDays(char) {
     const days = new Set();
@@ -3546,8 +3543,10 @@ function getPeriodDays(char) {
     if (!ps || !ps.lastPeriodDate) return days;
 
     const cycle = ps.cycleLength || 28;
-    const lastDate = new Date(ps.lastPeriodDate);
-    const now = new Date();
+    // タイムゾーンによる日付のズレを防ぐため文字列パース
+    const parts = ps.lastPeriodDate.split('-');
+    if (parts.length !== 3) return days;
+    const lastDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
 
     // 過去3サイクル分 + 次の1サイクル分をプロット
     for (let c = -3; c <= 1; c++) {
@@ -3556,7 +3555,7 @@ function getPeriodDays(char) {
         for (let d = 0; d < 7; d++) {
             const day = new Date(cycleStart);
             day.setDate(day.getDate() + d);
-            days.add(day.toISOString().slice(0, 10));
+            days.add(getLocalYMD(day));
         }
     }
     return days;
