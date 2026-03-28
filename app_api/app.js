@@ -1134,7 +1134,16 @@ function setupEventListeners() {
     // 生理日設定
     document.getElementById('btn-med-period-toggle').onclick = () => {
         const panel = document.getElementById('med-period-panel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        const isOpening = panel.style.display === 'none';
+        panel.style.display = isOpening ? 'block' : 'none';
+        if (isOpening) {
+            // 3ヶ月前〜今日の範囲に制限
+            const now = new Date();
+            const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+            const periodInput = document.getElementById('med-period-last');
+            periodInput.min = getLocalYMD(threeMonthsAgo);
+            periodInput.max = getLocalYMD(now);
+        }
     };
     document.getElementById('btn-med-period-save').onclick = () => savePeriodSettings();
     // Fitbit設定の初期値
@@ -3028,15 +3037,45 @@ function getMoonDisplay(age) {
     return { emoji: '🌑', name: '新月' };
 }
 
-/** 日本の祝日簡易判定 (年,月,日) */
+/** 日本の祝日判定 (year, month[1-12], day) */
 function isJapaneseHoliday(y, m, d) {
+    // 固定祝日
     const fixed = {
-        '1-1': true, '2-11': true, '2-23': true, '3-21': true,
-        '4-29': true, '5-3': true, '5-4': true, '5-5': true,
-        '7-20': true, '8-11': true, '9-23': true, '10-14': true,
-        '11-3': true, '11-23': true
+        '1-1': true,   // 元日
+        '2-11': true,  // 建国記念の日
+        '2-23': true,  // 天皇誕生日
+        '4-29': true,  // 昭和の日
+        '5-3': true,   // 憲法記念日
+        '5-4': true,   // みどりの日
+        '5-5': true,   // こどもの日
+        '8-11': true,  // 山の日
+        '11-3': true,  // 文化の日
+        '11-23': true  // 勤労感謝の日
     };
-    return !!fixed[`${m}-${d}`];
+    if (fixed[`${m}-${d}`]) return true;
+
+    // 春分の日（3月）・秋分の日（9月） ─ 年ごとに変動
+    if (m === 3) {
+        const springEquinox = Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+        if (d === springEquinox) return true;
+    }
+    if (m === 9) {
+        const autumnEquinox = Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+        if (d === autumnEquinox) return true;
+    }
+
+    // ハッピーマンデー（第N月曜日）
+    const dt = new Date(y, m - 1, d);
+    const dow = dt.getDay(); // 0=日, 1=月
+    const weekNum = Math.ceil(d / 7); // 第N週
+    if (dow === 1) { // 月曜日
+        if (m === 1 && weekNum === 2) return true;  // 成人の日 (1月第2月曜)
+        if (m === 7 && weekNum === 3) return true;  // 海の日 (7月第3月曜)
+        if (m === 9 && weekNum === 3) return true;  // 敬老の日 (9月第3月曜)
+        if (m === 10 && weekNum === 2) return true; // スポーツの日 (10月第2月曜)
+    }
+
+    return false;
 }
 
 /** モデル設定画面の読込 */
@@ -3245,26 +3284,26 @@ async function fetchFitbitData(char, forceRefresh) {
     medLog('Fitbitデータ取得開始', forceRefresh ? '(強制)' : '');
 
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-    let startDate, endDate = todayStr;
+    // ローカル時刻で「昨日」をendDateにする（今日のデータは未確定のため）
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const endDate = getLocalYMD(yesterday);
+    let startDate;
 
     if (!char.medicalData.firstFetchDone) {
         // 初回: 直近2ヶ月分
-        const twoMonthsAgo = new Date(today);
-        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-        startDate = twoMonthsAgo.toISOString().slice(0, 10);
+        const twoMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, today.getDate());
+        startDate = getLocalYMD(twoMonthsAgo);
         medLog('初回取得: ', startDate, '→', endDate);
     } else {
         // 以降: 最終取得日前日から
         const lastDate = findLastCachedDate(char);
         if (lastDate) {
-            const d = new Date(lastDate);
-            d.setDate(d.getDate() - 1);
-            startDate = d.toISOString().slice(0, 10);
+            const parts = lastDate.split('-');
+            const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10) - 1);
+            startDate = getLocalYMD(d);
         } else {
-            const twoMonthsAgo = new Date(today);
-            twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-            startDate = twoMonthsAgo.toISOString().slice(0, 10);
+            const twoMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, today.getDate());
+            startDate = getLocalYMD(twoMonthsAgo);
         }
     }
 
@@ -3330,15 +3369,15 @@ function updateTodaySummary(char) {
 
     document.getElementById('med-today-date').textContent = `${m}/${d}(${dow}) ${hh}:${mm}取得データ`;
 
-    const todayStr = now.toISOString().slice(0, 10);
-    const cache = char.medicalData.fitbitCache[todayStr] || {};
+    // 昨日のデータを表示（今日のデータは未確定）
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayStr = getLocalYMD(yesterday);
+    const cache = char.medicalData.fitbitCache[yesterdayStr] || {};
 
-    // 心拍
+    // 心拍（安静時のみ表示）
     const heart = cache.heart;
     if (heart && heart.restingHeartRate) {
-        const min = heart.minHeartRate || '-';
-        const max = heart.maxHeartRate || '-';
-        document.getElementById('med-today-heart').textContent = `${min}〜${max} (安静時:${heart.restingHeartRate})`;
+        document.getElementById('med-today-heart').textContent = `安静時: ${heart.restingHeartRate} bpm`;
     } else {
         document.getElementById('med-today-heart').textContent = '-';
     }
@@ -3410,39 +3449,56 @@ function savePeriodSettings() {
 /** 診察ルームのサマリー（上部）を更新 */
 function updateMedSummary(char) {
     const today = new Date();
-    const todayStr = getLocalYMD(today);
     document.getElementById('med-today-date').textContent = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
 
     const ps = char.medicalData.periodSettings;
     const periodEl = document.getElementById('med-today-period');
     
     if (ps && ps.lastPeriodDate) {
-        // 次回の予定日計算（もっともシンプルな方法）
         const parts = ps.lastPeriodDate.split('-');
         const lastDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
         const cycle = ps.cycleLength || 28;
         
-        // 直近のサイクル開始日を探す
         let nextP = new Date(lastDate);
         while (nextP < today) {
             nextP.setDate(nextP.getDate() + cycle);
         }
-        periodEl.textContent = getLocalYMD(nextP);
+        const diffDays = Math.ceil((nextP - today) / (1000 * 60 * 60 * 24));
+        periodEl.textContent = `${getLocalYMD(nextP)} (あと${diffDays}日)`;
     } else {
         periodEl.textContent = '未設定';
     }
 
-    // Fitbitデータ反映
-    const cache = char.medicalData.fitbitCache[todayStr] || {};
-    document.getElementById('med-today-temp').textContent = cache.tempVariation ? `${cache.tempVariation > 0 ? '+' : ''}${cache.tempVariation}℃` : '-';
-    document.getElementById('med-today-heart').textContent = cache.heartRate ? `${cache.heartRate} bpm` : '-';
-    
-    if (cache.sleep && cache.sleep.totalMinutes) {
-        const h = Math.floor(cache.sleep.totalMinutes / 60);
-        const m = cache.sleep.totalMinutes % 60;
-        document.getElementById('med-today-sleep').textContent = `${h}時間${m}分 (効率${cache.sleep.efficiency}%)`;
+    // Fitbitデータ：昨日のデータを表示（今日のデータは未確定のため）
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const yesterdayStr = getLocalYMD(yesterday);
+    const cache = char.medicalData.fitbitCache[yesterdayStr] || {};
+
+    // 心拍（安静時のみ）
+    const heart = cache.heart;
+    if (heart && heart.restingHeartRate) {
+        document.getElementById('med-today-heart').textContent = `安静時: ${heart.restingHeartRate} bpm`;
+    } else {
+        document.getElementById('med-today-heart').textContent = '-';
+    }
+
+    // 睡眠
+    const sleep = cache.sleep;
+    if (sleep && sleep.totalMinutes) {
+        const h = Math.floor(sleep.totalMinutes / 60);
+        const m = sleep.totalMinutes % 60;
+        document.getElementById('med-today-sleep').textContent = `${h}時間${m}分 (効率${sleep.efficiency || '-'}%)`;
     } else {
         document.getElementById('med-today-sleep').textContent = '-';
+    }
+
+    // 皮膚温
+    const temp = cache.temperature;
+    if (temp && temp.value !== null && temp.value !== undefined) {
+        const sign = temp.value >= 0 ? '+' : '';
+        document.getElementById('med-today-temp').textContent = `${sign}${temp.value.toFixed(2)}°`;
+    } else {
+        document.getElementById('med-today-temp').textContent = '-';
     }
 
     const moonAge = getMoonAge(today);
@@ -3456,10 +3512,10 @@ function navigateCalendar(direction) {
     if (medCalMonth < 0) { medCalMonth = 11; medCalYear--; }
     if (medCalMonth > 11) { medCalMonth = 0; medCalYear++; }
 
-    // 2ヶ月前まで制限
+    // 3ヶ月前〜3ヶ月先の範囲に制限
     const now = new Date();
-    const minDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const maxDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const minDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    const maxDate = new Date(now.getFullYear(), now.getMonth() + 3, 1);
     const calDate = new Date(medCalYear, medCalMonth, 1);
 
     if (calDate < minDate) { medCalYear = minDate.getFullYear(); medCalMonth = minDate.getMonth(); }
@@ -3508,8 +3564,8 @@ function renderMedCalendar(char) {
     const today = new Date();
     const todayStr = getLocalYMD(today); // UTCではなくローカル時刻で比較
 
-    // 生理日計算
-    const periodDays = getPeriodDays(char);
+    // 生理日計算（実績と予測に分離）
+    const periodData = getPeriodDays(char);
 
     // 前月の空セル
     for (let i = 0; i < firstDay; i++) {
@@ -3561,11 +3617,18 @@ function renderMedCalendar(char) {
             cell.appendChild(sleepEl);
         }
 
-        // 生理日ドット
-        if (periodDays.has(dateStr)) {
+        // 生理日ドット（実績）
+        if (periodData.actual.has(dateStr)) {
             const dot = document.createElement('div');
             dot.className = 'med-cal-period-dot';
             cell.appendChild(dot);
+        }
+        // 生理日予測
+        if (periodData.predicted.has(dateStr)) {
+            const pred = document.createElement('div');
+            pred.className = 'med-cal-period-predicted';
+            pred.textContent = '🩸';
+            cell.appendChild(pred);
         }
 
         body.appendChild(cell);
@@ -3582,34 +3645,44 @@ function getLocalYMD(date) {
     return `${y}-${m}-${d}`;
 }
 
-/** 生理予定日・過去日のSet（7日間）を計算 */
+/** 生理日を「実績」と「予測」に分けて返却 */
 function getPeriodDays(char) {
-    const days = new Set();
+    const actual = new Set();    // 実績（過去）
+    const predicted = new Set(); // 予測（未来）
     const ps = char.medicalData.periodSettings;
-    if (!ps || !ps.lastPeriodDate) return days;
+    if (!ps || !ps.lastPeriodDate) return { actual, predicted };
 
     const cycle = ps.cycleLength || 28;
     const parts = ps.lastPeriodDate.split('-');
-    if (parts.length !== 3) return days;
-    
-    // 基準日（ここを絶対に破壊しない）
+    if (parts.length !== 3) return { actual, predicted };
+
     const y = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10) - 1; // 月は0-indexed
+    const m = parseInt(parts[1], 10) - 1;
     const d = parseInt(parts[2], 10);
     const baseDate = new Date(y, m, d);
 
-    // 過去3サイクル 〜 未来2サイクル分を安全に計算
-    for (let c = -3; c <= 2; c++) {
-        // 各サイクルの開始日を算出（必ず新規 new Date でコピー）
+    // 「最終生理開始日」から7日間が「実績」、それ以降のサイクルが「予測」
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // 今日の終わりまでを「実績」とみなす
+
+    for (let c = -3; c <= 4; c++) {
         const cycleStart = new Date(y, m, d + (c * cycle));
-        
-        // その日から7日間をプロット
         for (let i = 0; i < 7; i++) {
             const day = new Date(cycleStart.getFullYear(), cycleStart.getMonth(), cycleStart.getDate() + i);
-            days.add(getLocalYMD(day));
+            const ymd = getLocalYMD(day);
+            if (c === 0) {
+                // 入力した「最終生理開始日」のサイクルは常に実績
+                actual.add(ymd);
+            } else if (day <= today) {
+                // 過去のサイクルも実績
+                actual.add(ymd);
+            } else {
+                // 未来は予測
+                predicted.add(ymd);
+            }
         }
     }
-    return days;
+    return { actual, predicted };
 }
 
 // --- 診察タブ機能切替 ---
@@ -3740,9 +3813,8 @@ function getLast48HoursData(char) {
     const result = {};
     const now = new Date();
     for (let i = 0; i < 3; i++) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().slice(0, 10);
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dateStr = getLocalYMD(d);
         if (char.medicalData.fitbitCache[dateStr]) {
             result[dateStr] = char.medicalData.fitbitCache[dateStr];
         }
