@@ -70,6 +70,7 @@
                 <button id="btn-char-prompt-settings" class="secondary-btn">⚙️ システムプロンプト</button>
                 <button id="btn-char-memory-settings" class="secondary-btn">🧠 メモリ (記憶)</button>
                 <button id="btn-open-room" class="secondary-btn room-btn">🏠 Roomへ</button>
+                <button id="btn-open-medical" class="secondary-btn room-btn">🩺 診察Room</button>
             </div>
 
             <div class="content-area">
@@ -584,10 +585,12 @@
                 <div class="med-period-settings">
                     <button id="btn-med-period-toggle" class="med-period-toggle-btn">🩸 生理日設定</button>
                     <div id="med-period-panel" class="med-period-panel" style="display:none;">
-                        <label for="med-period-last">最終生理開始日</label>
-                        <input type="date" id="med-period-last">
-                        <label for="med-period-cycle">周期（日）</label>
-                        <input type="number" id="med-period-cycle" value="28" min="20" max="45">
+                        <div style="font-size:0.9rem; margin-bottom:10px;">
+                            <span>平均周期: </span><strong id="med-period-avg-cycle">-- 日</strong>
+                        </div>
+                        <div id="med-period-history-list" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- JSで入力フィールド(最大12件)を描画 -->
+                        </div>
                         <button id="btn-med-period-save" class="primary-btn full-width margin-top">保存</button>
                     </div>
                 </div>
