@@ -3364,8 +3364,14 @@ async function fetchFitbitData(char, forceRefresh) {
                 char.medicalData.fitbitCache[h.date].heart = h;
             });
         }
-        if (data.temperature && Array.isArray(data.temperature)) {
-            data.temperature.forEach(t => {
+        if (data.temperature) {
+            const tempObj = data.temperature;
+            if (tempObj.debug) {
+                medLog('[Debug] Temperature raw response:', tempObj.debug.rawResponse || tempObj.debug.error || 'No data');
+            }
+            const records = Array.isArray(tempObj.data) ? tempObj.data : [];
+            medLog('[Debug] Temperature records processed:', records.length);
+            records.forEach(t => {
                 if (!char.medicalData.fitbitCache[t.date]) char.medicalData.fitbitCache[t.date] = {};
                 char.medicalData.fitbitCache[t.date].temperature = t;
             });
@@ -3549,8 +3555,15 @@ function updateTodaySummary(char) {
             document.getElementById('med-today-sleep').textContent = 'データ未取得';
         }
 
-        // 皮膚温
-        const temp = cache.temperature;
+        // 皮膚温 (当日が空なら前日の記録=昨晩分を探す)
+        let temp = cache.temperature;
+        if (!temp || temp.value === null || temp.value === undefined) {
+            const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const yesterdayStr = getLocalYMD(yesterday);
+            const yCache = char.medicalData.fitbitCache[yesterdayStr];
+            if (yCache && yCache.temperature) temp = yCache.temperature;
+        }
+
         if (temp && temp.value !== null && temp.value !== undefined) {
             const sign = temp.value >= 0 ? '+' : '';
             document.getElementById('med-today-temp').textContent = `${sign}${temp.value.toFixed(2)}°`;
@@ -3785,8 +3798,19 @@ function updateMedSummary(char) {
             document.getElementById('med-today-sleep').textContent = 'データ未取得';
         }
 
-        // 皮膚温
-        const temp = cache.temperature;
+        // 皮膚温 (当日が空なら前日の記録=昨晩分を探す)
+        let temp = cache.temperature;
+        if (!temp || temp.value === null || temp.value === undefined) {
+            const parts = todayStr.split('-');
+            if (parts.length === 3) {
+                const day = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                day.setDate(day.getDate() - 1);
+                const prevStr = getLocalYMD(day);
+                const pCache = char.medicalData.fitbitCache[prevStr];
+                if (pCache && pCache.temperature) temp = pCache.temperature;
+            }
+        }
+
         if (temp && temp.value !== null && temp.value !== undefined) {
             const sign = temp.value >= 0 ? '+' : '';
             document.getElementById('med-today-temp').textContent = `${sign}${temp.value.toFixed(2)}°`;
