@@ -3302,7 +3302,7 @@ async function fetchFitbitData(char, forceRefresh) {
 
     let startDate;
 
-    if (!char.medicalData.firstFetchDone || forceRefresh) {
+    if (!char.medicalData.firstFetchDone || forceRefresh === true) {
         // 初回、または強制手動更新の場合はカレンダー全範囲
         startDate = minStartDate;
         medLog('初回/強制取得: ', startDate, '→', endDate);
@@ -3539,9 +3539,12 @@ function updateTodaySummary(char) {
         const sleep = cache.sleep;
         if (sleep && sleep.totalMinutes) {
             const h = Math.floor(sleep.totalMinutes / 60);
-            const mins = sleep.totalMinutes % 60;
-            const eff = sleep.efficiency || '-';
-            document.getElementById('med-today-sleep').textContent = `${h}h${String(mins).padStart(2, '0')}m (score${eff})`;
+            const m = sleep.totalMinutes % 60;
+            // 独自スコア表示（なければ効率を表示）
+            const scoreStr = sleep.customScore !== undefined 
+                ? `score:${sleep.customScore.toFixed(1)}` 
+                : `効率${sleep.efficiency || '-'}%`;
+            document.getElementById('med-today-sleep').textContent = `${h}h${String(m).padStart(2, '0')}m (${scoreStr})`;
         } else {
             document.getElementById('med-today-sleep').textContent = 'データ未取得';
         }
@@ -3775,7 +3778,9 @@ function updateMedSummary(char) {
         if (sleep && sleep.totalMinutes) {
             const h = Math.floor(sleep.totalMinutes / 60);
             const m = sleep.totalMinutes % 60;
-            document.getElementById('med-today-sleep').textContent = `${h}時間${m}分 (効率${sleep.efficiency || '-'}%)`;
+            // efficiency の代わりに customScore を表示
+            const score = sleep.customScore ? sleep.customScore.toFixed(1) : (sleep.efficiency || '-');
+            document.getElementById('med-today-sleep').textContent = `${h}h${String(m).padStart(2, '0')}m (score: ${score})`;
         } else {
             document.getElementById('med-today-sleep').textContent = 'データ未取得';
         }
@@ -3880,15 +3885,18 @@ function renderMedCalendar(char) {
         if (isSun) cell.classList.add('sun');
         if (isHoliday) cell.classList.add('holiday');
 
-        // 睡眠品質で背景色
+		// 睡眠品質で背景色
         const cache = char.medicalData.fitbitCache[dateStr];
         if (cache && cache.sleep) {
-            const eff = cache.sleep.efficiency || 0;
-            if (eff >= 90) cell.classList.add('sleep-great');
-            else if (eff >= 80) cell.classList.add('sleep-good');
-            else if (eff >= 70) cell.classList.add('sleep-ok');
-            else if (eff >= 60) cell.classList.add('sleep-poor');
-            else if (eff > 0) cell.classList.add('sleep-bad');
+            // customScore を優先して取得
+            const score = cache.sleep.customScore || cache.sleep.efficiency || 0;
+            
+            // スコア基準（俺の評価基準だ）
+            if (score >= 85) cell.classList.add('sleep-great');
+            else if (score >= 75) cell.classList.add('sleep-good');
+            else if (score >= 60) cell.classList.add('sleep-ok');
+            else if (score >= 45) cell.classList.add('sleep-poor');
+            else if (score > 0) cell.classList.add('sleep-bad');
         }
 
         // 日付
