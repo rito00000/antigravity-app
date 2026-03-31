@@ -3326,7 +3326,9 @@ async function autoFetchFitbitData(char) {
     }
 
     const now = Date.now();
-    const lastFetch = char.medicalData.lastFetchTime ? new Date(char.medicalData.lastFetchTime).getTime() : 0;
+    // 【Regi's Fix】charではなくglobal配列の最終取得時間を参照する
+    const lastFetchStr = AppState.globalMedicalData.lastFetchTime;
+    const lastFetch = lastFetchStr ? new Date(lastFetchStr).getTime() : 0;
     const oneHour = 60 * 60 * 1000;
 
     if (now - lastFetch < oneHour) {
@@ -3334,7 +3336,14 @@ async function autoFetchFitbitData(char) {
         return;
     }
 
-    await fetchFitbitData(char, false);
+    try {
+        // 【Regi's Fix】手動更新と同じく、詳細データと古いデータの破棄を完遂させる
+        await fetchFitbitData(char, false);
+        await fetchHeartIntradayData(char);  // 心拍詳細(min/max)を別途取得
+        purgeOldFitbitCache(char);           // カレンダー表示範囲外の古いデータを破棄
+    } catch (e) {
+        medLog('自動データ取得エラー:', e.message);
+    }
 }
 
 async function manualRefreshFitbit() {
@@ -3434,7 +3443,7 @@ async function fetchFitbitData(char, forceRefresh) {
         }
 
         // キャッシュに格納（後から取得したデータで上書き = より新鮮なデータ優先）
-        const gmd = AppState.globalMedicalData;
+		const gmd = AppState.globalMedicalData;
         if (data.sleep && Array.isArray(data.sleep)) {
             data.sleep.forEach(s => {
                 if (!gmd.fitbitCache[s.date]) gmd.fitbitCache[s.date] = {};
@@ -3444,7 +3453,13 @@ async function fetchFitbitData(char, forceRefresh) {
         if (data.heart && Array.isArray(data.heart)) {
             data.heart.forEach(h => {
                 if (!gmd.fitbitCache[h.date]) gmd.fitbitCache[h.date] = {};
-                gmd.fitbitCache[h.date].heart = h;
+                
+                // 【Regi's Fix】心拍の箱を丸ごと破壊せず、既存のmin/maxを維持しながらマージする
+                if (!gmd.fitbitCache[h.date].heart) {
+                    gmd.fitbitCache[h.date].heart = h;
+                } else {
+                    gmd.fitbitCache[h.date].heart = { ...gmd.fitbitCache[h.date].heart, ...h };
+                }
             });
         }
         if (data.temperature) {
