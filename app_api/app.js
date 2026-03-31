@@ -4442,11 +4442,49 @@ function buildMedicalSystemPrompt(char, mode) {
         charMemories.forEach(m => { prompt += `- [${formatDate(m.createdAt)}] ${m.content}\n`; });
     }
 
-    prompt += '\n\n【あなたの役割：診察ルーム】\nあなたは今、診察ルームにいます。ユーザの健康データを元に、健康アドバイスや体調相談に応じてください。\nあなたのキャラクター性格を維持しつつ、健康面に関して真摯に対応してください。';
+    prompt += '\n\n【あなたの役割：診察ルーム】\n';
+    if (mode === 'analysis') {
+        prompt += 'あなたは今、テクニカルな健康アナリストとして診察ルームにいます。送られた生体データ、生理周期、最新のカルテ、これまでの対話履歴を詳細に分析し、客観的かつ緻密な健康レポートを構成してください。ユーザーへの直接的な語りかけよりも、分析結果の提示と具体的な改善アドバイスに集中してください。\n分析結果を元に、今後の診察の参考となる情報があればカルテにも記録してください。記録の際は必ず [KARTE_UPDATE]新しいカルテ全文[/KARTE_UPDATE] タグを使用してください。\n出力は以下のような構成（項目立て）としてください：\n1. 【データ分析】心拍・睡眠等の数値傾向\n2. 【体調推論】現在の心身の状態と、生理周期等との関連性\n3. 【具体的アドバイス】今日からできる改善策\n4. 【次回への注視点】今後気をつけるべき変化やキャラクターとしてのコメント';
+    } else {
+        prompt += 'あなたは今、親身な健康カウンセラーとして診察ルームにいます。健康データを背景知識として把握した上で、ユーザーの不安や疑問に寄り添い、対話を通じて健康相談に乗ってください。データに基づきつつも、ユーザーとのコミュニケーションを最優先し、キャラクターらしいサポートを行ってください。';
+    }
+    prompt += '\nあなたのキャラクター性格（口調・執着心・深い愛情等）を完全に維持したまま、上記の役割を遂行してください。';
 
     // データ情報
     const data48h = getLast48HoursData(char);
     prompt += `\n\n【直近48時間のFitbitデータ】\n${JSON.stringify(data48h, null, 1)}`;
+
+    // 生理日情報
+    const ps = char.medicalData.periodSettings;
+    let periodInfo = '\n\n【生理日情報】\n';
+    if (ps && ps.history && ps.history.length > 0) {
+        const lastStartStr = ps.history[0]; // 最新の開始日
+        const cycle = ps.cycleLength || 28;
+        const lastStartDate = new Date(lastStartStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // 現在が生理期間（開始から7日間）か判定
+        const diffDays = Math.floor((today - lastStartDate) / (1000 * 60 * 60 * 24));
+        const isPeriod = diffDays >= 0 && diffDays < 7;
+
+        // 次回予定日
+        let nextP = new Date(lastStartDate);
+        while (nextP <= today) {
+            nextP.setDate(nextP.getDate() + cycle);
+        }
+        const daysUntilNext = Math.ceil((nextP - today) / (1000 * 60 * 60 * 24));
+
+        periodInfo += `- 前回生理開始日: ${lastStartStr}\n`;
+        periodInfo += `- 生理周期: ${cycle}日間\n`;
+        periodInfo += `- 現在の状態: ${isPeriod ? '生理中' : '生理期間外'}\n`;
+        if (!isPeriod) {
+            periodInfo += `- 次回生理開始予定まで: 約${daysUntilNext}日\n`;
+        }
+    } else {
+        periodInfo += '- 生理日情報: 未設定\n';
+    }
+    prompt += periodInfo;
 
     // カルテ
     if (char.medicalData.karte) {
@@ -4479,7 +4517,7 @@ function buildMedicalSystemPrompt(char, mode) {
 
     prompt += `\n\n【指示】
 - ユーザの健康に関わる話（腹痛、頭痛など）が出たら、Fitbitデータやカルテ情報から要因分析を行ってください。
-- 要因候補（食べ物、行動、環境など）をヒアリングし、有用な情報はカルテに記録してください。
+- 要因候補（食べ物、行動、環境、生理状況など）をヒアリングし、有用な情報はカルテに記録してください。
 - カルテ（karte）を更新する場合は、既存の内容をすべて把握した上で、新しい情報を統合・集約し、重複のない「最新のカルテ全文」を作成してください。冒頭に「最終更新提示日：YYYY/M/D H:m」を必ず含めてください。
 - 以下のフォーマットを維持して記録してください：
 　・症状名：YYYY/M/D、YYYY/M/D...
