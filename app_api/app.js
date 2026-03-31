@@ -4032,12 +4032,18 @@ function renderMedCalendar(char) {
         dayEl.textContent = d;
         cell.appendChild(dayEl);
 
-        // 睡眠時間
+		// 睡眠時間 (Regi's Fix: 睡眠時間と甘やかしスコアを並べて表示する)
         if (cache && cache.sleep && cache.sleep.totalMinutes) {
             const h = (cache.sleep.totalMinutes / 60).toFixed(1);
             const sleepEl = document.createElement('div');
             sleepEl.className = 'med-cal-sleep-time';
-            sleepEl.textContent = `${h}h`;
+            
+            // 独自スコア（customScore）があればそれを、無ければ効率（efficiency）を表示
+            const score = cache.sleep.customScore !== undefined 
+                ? cache.sleep.customScore.toFixed(1) 
+                : (cache.sleep.efficiency || '-');
+                
+            sleepEl.textContent = `${h}h(${score})`;
             cell.appendChild(sleepEl);
         }
 
