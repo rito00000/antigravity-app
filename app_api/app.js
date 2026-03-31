@@ -18,7 +18,14 @@ const AppState = {
     threads: [],    // { id, charId, title, createdAt, messages: [] }
     memories: [],   // { id, charId, createdAt, content }
     activeCharId: null,
-    activeThreadId: null
+    activeThreadId: null,
+    // グローバル健康データ
+    globalMedicalData: {
+        fitbitCache: {},
+        lastFetchTime: null,
+        firstFetchDone: false,
+        periodSettings: { history: [], cycleLength: 28 }
+    }
 };
 
 // ============================================================
@@ -71,6 +78,37 @@ async function loadData() {
             AppState.characters = Array.isArray(data.characters) ? data.characters : [];
             AppState.threads = Array.isArray(data.threads) ? data.threads : [];
             AppState.memories = Array.isArray(data.memories) ? data.memories : [];
+            AppState.globalMedicalData = data.globalMedicalData || {
+                fitbitCache: {},
+                lastFetchTime: null,
+                firstFetchDone: false,
+                periodSettings: { history: [], cycleLength: 28 }
+            };
+
+            // --- データ移行ロジック (個別キャラ -> グローバル) ---
+            if (!AppState.globalMedicalData.lastFetchTime && AppState.characters.length > 0) {
+                let bestChar = null;
+                let latestTime = 0;
+                AppState.characters.forEach(c => {
+                    if (c.medicalData && c.medicalData.lastFetchTime) {
+                        const t = new Date(c.medicalData.lastFetchTime).getTime();
+                        if (t > latestTime) {
+                            latestTime = t;
+                            bestChar = c;
+                        }
+                    }
+                });
+                if (bestChar) {
+                    console.log(`[Migration] 最も新しいデータを持つキャラ(${bestChar.name})からデータを移行します。`);
+                    const md = bestChar.medicalData;
+                    AppState.globalMedicalData.fitbitCache = md.fitbitCache || {};
+                    AppState.globalMedicalData.lastFetchTime = md.lastFetchTime;
+                    AppState.globalMedicalData.firstFetchDone = md.firstFetchDone || false;
+                    AppState.globalMedicalData.periodSettings = md.periodSettings || { history: [], cycleLength: 28 };
+                    await saveData(); 
+                }
+            }
+
             console.log('[DB] IndexedDBからデータ読込完了');
             return;
         }
@@ -128,7 +166,8 @@ async function saveData() {
             fitbitSecret: AppState.fitbitSecret,
             characters: AppState.characters,
             threads: AppState.threads,
-            memories: AppState.memories
+            memories: AppState.memories,
+            globalMedicalData: AppState.globalMedicalData
         };
         await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_APP, 'readwrite');
@@ -1825,13 +1864,9 @@ function ensureRoomData(char) {
     if (!Array.isArray(char.roomLogs)) char.roomLogs = [];
     if (!Array.isArray(char.diary)) char.diary = [];
     if (!Array.isArray(char.roomLongTermMemory)) char.roomLongTermMemory = [];
-    // 診察ルーム用データ初期化
+    // 診察ルーム用データ初期設定 (キャラ個別分のみ)
     if (!char.medicalData) {
         char.medicalData = {
-            fitbitCache: {},       // { 'YYYY-MM-DD': { sleep, heart, temperature } }
-            lastFetchTime: null,   // 最終Fitbitデータ取得時刻
-            firstFetchDone: false, // 初回2ヶ月取得済みフラグ
-            periodSettings: null,  // { lastPeriodDate, cycleLength }
             karte: '',             // AIが管理するカルテテキスト
             karteOld: '',          // [追加] 1つ前のカルテテキスト（バックアップ）
             analysisResults: [],   // 分析結果配列 { date, content, modelUsed }
@@ -3242,7 +3277,9 @@ async function enterMedicalRoom() {
     updateTodaySummary(char);
     
     // 生理日設定の復元
-    if (char.medicalData.periodSettings) {
+    // 生理日予測
+    const ps = AppState.globalMedicalData.periodSettings;
+    if (ps) {
         // UI初期化は renderPeriodHistoryPanel() に委譲
     }
 
@@ -3345,13 +3382,14 @@ async function fetchFitbitData(char, forceRefresh) {
     const minStartDate = getLocalYMD(minStartDateObj);
 
     let startDate;
+    const gmd = AppState.globalMedicalData;
 
-    if (!char.medicalData.firstFetchDone || forceRefresh === true) {
+    if (!gmd.firstFetchDone || forceRefresh === true) {
         // 初回、または強制手動更新の場合はカレンダー全範囲
         startDate = minStartDate;
         medLog('初回/強制取得: ', startDate, '→', endDate);
     } else {
-        const lastDateStr = findLastCachedDate(char);
+        const lastDateStr = findLastCachedDate();
         if (lastDateStr) {
             const parts = lastDateStr.split('-');
             const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
@@ -3396,16 +3434,17 @@ async function fetchFitbitData(char, forceRefresh) {
         }
 
         // キャッシュに格納（後から取得したデータで上書き = より新鮮なデータ優先）
+        const gmd = AppState.globalMedicalData;
         if (data.sleep && Array.isArray(data.sleep)) {
             data.sleep.forEach(s => {
-                if (!char.medicalData.fitbitCache[s.date]) char.medicalData.fitbitCache[s.date] = {};
-                char.medicalData.fitbitCache[s.date].sleep = s;
+                if (!gmd.fitbitCache[s.date]) gmd.fitbitCache[s.date] = {};
+                gmd.fitbitCache[s.date].sleep = s;
             });
         }
         if (data.heart && Array.isArray(data.heart)) {
             data.heart.forEach(h => {
-                if (!char.medicalData.fitbitCache[h.date]) char.medicalData.fitbitCache[h.date] = {};
-                char.medicalData.fitbitCache[h.date].heart = h;
+                if (!gmd.fitbitCache[h.date]) gmd.fitbitCache[h.date] = {};
+                gmd.fitbitCache[h.date].heart = h;
             });
         }
         if (data.temperature) {
@@ -3416,8 +3455,9 @@ async function fetchFitbitData(char, forceRefresh) {
             const records = Array.isArray(tempObj.data) ? tempObj.data : [];
             medLog('[Debug] Temperature records processed:', records.length);
             records.forEach(t => {
-                if (!char.medicalData.fitbitCache[t.date]) char.medicalData.fitbitCache[t.date] = {};
-                char.medicalData.fitbitCache[t.date].temperature = t;
+                const gmd = AppState.globalMedicalData;
+                if (!gmd.fitbitCache[t.date]) gmd.fitbitCache[t.date] = {};
+                gmd.fitbitCache[t.date].temperature = t;
             });
         }
     }
@@ -3448,8 +3488,8 @@ async function fetchFitbitData(char, forceRefresh) {
             );
         }
 
-        char.medicalData.lastFetchTime = new Date().toISOString();
-        char.medicalData.firstFetchDone = true;
+        AppState.globalMedicalData.lastFetchTime = new Date().toISOString();
+        AppState.globalMedicalData.firstFetchDone = true;
         saveData();
         medLog('Fitbitデータ取得完了（全チャンク完了）');
 
@@ -3459,8 +3499,8 @@ async function fetchFitbitData(char, forceRefresh) {
     }
 }
 
-function findLastCachedDate(char) {
-    const dates = Object.keys(char.medicalData.fitbitCache).sort();
+function findLastCachedDate() {
+    const dates = Object.keys(AppState.globalMedicalData.fitbitCache).sort();
     return dates.length > 0 ? dates[dates.length - 1] : null;
 }
 
@@ -3486,7 +3526,7 @@ async function fetchHeartIntradayData(char) {
     for (const dateStr of dates) {
         // 当日以外: キャッシュに既にminHeartRateがある場合はスキップ
         if (dateStr !== todayStr) {
-            const cached = char.medicalData.fitbitCache[dateStr];
+            const cached = AppState.globalMedicalData.fitbitCache[dateStr];
             if (cached && cached.heart && cached.heart.minHeartRate != null) {
                 medLog('[HeartIntraday] スキップ(キャッシュ有):', dateStr);
                 continue;
@@ -3512,14 +3552,15 @@ async function fetchHeartIntradayData(char) {
             }
 
             // キャッシュの heart オブジェクトに minHeartRate / maxHeartRate をマージ
-            if (!char.medicalData.fitbitCache[dateStr]) {
-                char.medicalData.fitbitCache[dateStr] = {};
+            const gmd = AppState.globalMedicalData;
+            if (!gmd.fitbitCache[dateStr]) {
+                gmd.fitbitCache[dateStr] = {};
             }
-            if (!char.medicalData.fitbitCache[dateStr].heart) {
-                char.medicalData.fitbitCache[dateStr].heart = {};
+            if (!gmd.fitbitCache[dateStr].heart) {
+                gmd.fitbitCache[dateStr].heart = {};
             }
-            char.medicalData.fitbitCache[dateStr].heart.minHeartRate = data.minHeartRate;
-            char.medicalData.fitbitCache[dateStr].heart.maxHeartRate = data.maxHeartRate;
+            gmd.fitbitCache[dateStr].heart.minHeartRate = data.minHeartRate;
+            gmd.fitbitCache[dateStr].heart.maxHeartRate = data.maxHeartRate;
 
             medLog('[HeartIntraday] 取得完了:', dateStr, 'min:', data.minHeartRate, 'max:', data.maxHeartRate);
 
@@ -3541,10 +3582,11 @@ function purgeOldFitbitCache(char) {
     const minDateObj = new Date(now.getFullYear(), now.getMonth() - 2, 1);
     const minDateStr = getLocalYMD(minDateObj);
 
+    const gmd = AppState.globalMedicalData;
     let purgedCount = 0;
-    Object.keys(char.medicalData.fitbitCache).forEach(dateStr => {
+    Object.keys(gmd.fitbitCache).forEach(dateStr => {
         if (dateStr < minDateStr) {
-            delete char.medicalData.fitbitCache[dateStr];
+            delete gmd.fitbitCache[dateStr];
             purgedCount++;
         }
     });
@@ -3567,7 +3609,8 @@ function updateTodaySummary(char) {
 
     // 今日のデータを表示
     const todayStr = getLocalYMD(now);
-    const cache = char.medicalData.fitbitCache[todayStr] || null;
+    const gmd = AppState.globalMedicalData;
+    const cache = gmd.fitbitCache[todayStr] || null;
 
     if (!cache) {
         document.getElementById('med-today-heart').textContent = 'データ未取得';
@@ -3604,7 +3647,8 @@ function updateTodaySummary(char) {
         if (!temp || temp.value === null || temp.value === undefined) {
             const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
             const yesterdayStr = getLocalYMD(yesterday);
-            const yCache = char.medicalData.fitbitCache[yesterdayStr];
+            const gmd = AppState.globalMedicalData;
+            const yCache = gmd.fitbitCache[yesterdayStr];
             if (yCache && yCache.temperature) temp = yCache.temperature;
         }
 
@@ -3629,9 +3673,9 @@ function updateTodaySummary(char) {
  * 生理予定日の表示を更新する
  * [修正] 旧フォーマット(lastPeriodDate)と新フォーマット(history[])の両方に対応
  */
-function updatePeriodDisplay(char) {
+function updatePeriodDisplay() {
     const periodEl = document.getElementById('med-today-period');
-    const ps = char.medicalData.periodSettings;
+    const ps = AppState.globalMedicalData.periodSettings;
 
     // 互換: historyがあればhistory[0]を最新基準日にし、なければlastPeriodDateを使う
     let latestDateStr = null;
@@ -3680,9 +3724,8 @@ function calculateAverageCycle(history) {
 }
 
 /** 生理日設定パネルの描画 */
-function renderPeriodHistoryPanel(char) {
-    if (!char.medicalData.periodSettings) char.medicalData.periodSettings = {};
-    const ps = char.medicalData.periodSettings;
+function renderPeriodHistoryPanel() {
+    const ps = AppState.globalMedicalData.periodSettings;
     
     // 互換性: 古い lastPeriodDate を history配列に変換
     if (!ps.history) {
@@ -3761,7 +3804,7 @@ function savePeriodSettings() {
     
     const cycle = calculateAverageCycle(limitedHistory);
     
-    char.medicalData.periodSettings = {
+    AppState.globalMedicalData.periodSettings = {
         history: limitedHistory,
         cycleLength: cycle
     };
@@ -3772,7 +3815,7 @@ function savePeriodSettings() {
     renderMedCalendar(char);
     
     document.getElementById('med-period-panel').style.display = 'none';
-    medLog('生理日設定保存・カレンダー更新', char.medicalData.periodSettings);
+    medLog('生理日設定保存・カレンダー更新', AppState.globalMedicalData.periodSettings);
 }
 
 /** 診察ルームのサマリー（上部）を更新 */
@@ -3780,7 +3823,7 @@ function updateMedSummary(char) {
     const today = new Date();
     document.getElementById('med-today-date').textContent = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
 
-    const ps = char.medicalData.periodSettings;
+    const ps = AppState.globalMedicalData.periodSettings;
     const periodEl = document.getElementById('med-today-period');
     
     // [修正] updatePeriodDisplay と同じロジックで、history[] と lastPeriodDate(旧互換)の両方に対応
@@ -3812,7 +3855,7 @@ function updateMedSummary(char) {
 
     // Fitbitデータ：今日のデータを優先
     const todayStr = getLocalYMD(today);
-    const cache = char.medicalData.fitbitCache[todayStr] || null;
+    const cache = AppState.globalMedicalData.fitbitCache[todayStr] || null;
 
     if (!cache) {
         document.getElementById('med-today-heart').textContent = 'データ未取得';
@@ -3850,7 +3893,7 @@ function updateMedSummary(char) {
                 const day = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
                 day.setDate(day.getDate() - 1);
                 const prevStr = getLocalYMD(day);
-                const pCache = char.medicalData.fitbitCache[prevStr];
+                const pCache = AppState.globalMedicalData.fitbitCache[prevStr];
                 if (pCache && pCache.temperature) temp = pCache.temperature;
             }
         }
@@ -3927,7 +3970,7 @@ function renderMedCalendar(char) {
     const todayStr = getLocalYMD(today); // UTCではなくローカル時刻で比較
 
     // 生理日計算（実績と予測に分離）
-    const periodData = getPeriodDays(char);
+    const periodData = getPeriodDays();
 
     // 前月の空セル
     for (let i = 0; i < firstDay; i++) {
@@ -3954,7 +3997,8 @@ function renderMedCalendar(char) {
         if (isHoliday) cell.classList.add('holiday');
 
 		// 睡眠品質で背景色
-        const cache = char.medicalData.fitbitCache[dateStr];
+        const gmd = AppState.globalMedicalData;
+        const cache = gmd.fitbitCache[dateStr];
         if (cache && cache.sleep) {
             // customScore を優先して取得
             const score = cache.sleep.customScore || cache.sleep.efficiency || 0;
@@ -4011,10 +4055,10 @@ function getLocalYMD(date) {
 }
 
 /** 生理日を「実績」と「予測」に分けて返却 */
-function getPeriodDays(char) {
+function getPeriodDays() {
     const actual = new Set();    // 実績（過去の入力履歴）
     const predicted = new Set(); // 予測（計算）
-    const ps = char.medicalData.periodSettings;
+    const ps = AppState.globalMedicalData.periodSettings;
     
     // 互換性チェック
     let history = ps ? ps.history : [];
@@ -4200,8 +4244,8 @@ function getLast48HoursData(char) {
     for (let i = 0; i < 3; i++) {
         const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
         const dateStr = getLocalYMD(d);
-        if (char.medicalData.fitbitCache[dateStr]) {
-            result[dateStr] = char.medicalData.fitbitCache[dateStr];
+        if (AppState.globalMedicalData.fitbitCache[dateStr]) {
+            result[dateStr] = AppState.globalMedicalData.fitbitCache[dateStr];
         }
     }
     return result;
@@ -4498,7 +4542,7 @@ function buildMedicalSystemPrompt(char, mode) {
     prompt += `\n\n【直近48時間のFitbitデータ】\n${JSON.stringify(data48h, null, 1)}`;
 
     // 生理日情報
-    const ps = char.medicalData.periodSettings;
+    const ps = AppState.globalMedicalData.periodSettings;
     let periodInfo = '\n\n【生理日情報】\n';
     if (ps && ps.history && ps.history.length > 0) {
         const lastStartStr = ps.history[0]; // 最新の開始日
