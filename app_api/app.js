@@ -4176,10 +4176,24 @@ function renderChatView(char, container) {
 
     // 既存チャットログ表示
     char.medicalData.chatLogs.forEach(log => {
-        const msg = document.createElement('div');
-        msg.className = `med-chat-msg ${log.role === 'user' ? 'user' : (log.role === 'system' ? 'system' : 'ai')}`;
-        msg.textContent = log.text;
-        messagesDiv.appendChild(msg);
+        const msgCol = document.createElement('div');
+        msgCol.className = `med-chat-msg ${log.role === 'user' ? 'user' : (log.role === 'system' ? 'system' : 'ai')}`;
+        
+        const textEl = document.createElement('div');
+        textEl.className = 'med-chat-text'; // style.css での定義に合わせて調整が必要な場合用
+        textEl.textContent = log.text;
+        
+        const timeEl = document.createElement('div');
+        timeEl.className = 'msg-time'; // 既存の .msg-time スタイルを流用
+        let meta = formatDate(log.timestamp);
+        if (log.role === 'model' && log.modelUsed) {
+            meta += ` (${log.modelUsed})`;
+        }
+        timeEl.textContent = meta;
+
+        msgCol.appendChild(textEl);
+        msgCol.appendChild(timeEl);
+        messagesDiv.appendChild(msgCol);
     });
 
     const inputArea = document.createElement('div');
@@ -4220,16 +4234,25 @@ async function sendMedChat(char) {
     input.disabled = true;
 
     // ユーザメッセージ追加
-    char.medicalData.chatLogs.push({ role: 'user', text, timestamp: new Date().toISOString(), source: 'medical' });
+    const userLogEntry = { role: 'user', text, timestamp: new Date().toISOString(), source: 'medical' };
+    char.medicalData.chatLogs.push(userLogEntry);
     // Room側ログにも追加(共有)
-    char.roomLogs.push({ role: 'user', text, timestamp: new Date().toISOString(), source: 'medical' });
+    char.roomLogs.push(userLogEntry);
     saveData();
 
     // UI更新
     const messagesDiv = document.getElementById('med-chat-messages');
     const userMsg = document.createElement('div');
     userMsg.className = 'med-chat-msg user';
-    userMsg.textContent = text;
+    
+    const uText = document.createElement('div');
+    uText.textContent = text;
+    const uTime = document.createElement('div');
+    uTime.className = 'msg-time';
+    uTime.textContent = formatDate(userLogEntry.timestamp);
+    
+    userMsg.appendChild(uText);
+    userMsg.appendChild(uTime);
     messagesDiv.appendChild(userMsg);
 
     const loadingMsg = document.createElement('div');
@@ -4281,8 +4304,9 @@ async function sendMedChat(char) {
         }
 
         // AIメッセージ保存
-        char.medicalData.chatLogs.push({ role: 'model', text: aiText, timestamp: new Date().toISOString(), source: 'medical' });
-        char.roomLogs.push({ role: 'model', text: aiText, timestamp: new Date().toISOString(), source: 'medical' });
+        const aiLogEntry = { role: 'model', text: aiText, timestamp: new Date().toISOString(), source: 'medical', modelUsed: AppState.medChatModel };
+        char.medicalData.chatLogs.push(aiLogEntry);
+        char.roomLogs.push(aiLogEntry);
         saveData();
 
         // UI更新
@@ -4290,7 +4314,16 @@ async function sendMedChat(char) {
         if (loading) loading.remove();
         const aiMsg = document.createElement('div');
         aiMsg.className = 'med-chat-msg ai';
-        aiMsg.textContent = aiText;
+        
+        const aText = document.createElement('div');
+        aText.style.whiteSpace = 'pre-wrap';
+        aText.textContent = aiText;
+        const aTime = document.createElement('div');
+        aTime.className = 'msg-time';
+        aTime.textContent = `${formatDate(aiLogEntry.timestamp)} (${aiLogEntry.modelUsed})`;
+        
+        aiMsg.appendChild(aText);
+        aiMsg.appendChild(aTime);
         messagesDiv.appendChild(aiMsg);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
