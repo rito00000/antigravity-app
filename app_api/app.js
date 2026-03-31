@@ -430,6 +430,9 @@ function showView(viewName, pushHistory = true) {
     // デバッグログ
     console.log(`[Router] View transition: ${viewName} (push: ${pushHistory})`);
 
+    // 現在の表示中ビューを記録（popstate制御の起点用）
+    AppState.currentView = viewName;
+
     Object.values(views).forEach(v => v.classList.remove('active'));
     views[viewName].classList.add('active');
 
@@ -469,6 +472,40 @@ window.addEventListener('popstate', (e) => {
 
     // デバッグログ
     console.log('[Router] PopState detected', state);
+
+    // --- 戻り先強制制御（Historyスタックに頼らない一貫したナビゲーション） ---
+    const fromView = AppState.currentView;
+
+    // Room から戻る際 ➡ 常にスレッド一覧へ
+    if (fromView === 'room') {
+        showView('thread', false);
+        renderThreads();
+        return;
+    }
+    // アプリ設定 から戻る際 ➡ 常にキャラ一覧へ
+    if (fromView === 'globalSettings') {
+        showView('main', false);
+        renderCharacters();
+        return;
+    }
+    // モデル設定 から戻る際 ➡ 常にアプリ設定へ
+    if (fromView === 'modelSettings') {
+        showView('globalSettings', false);
+        return;
+    }
+    // Room設定等 から戻る際 ➡ 常に Room へ
+    if (['roomSettings', 'roomDiary', 'roomSchedule', 'roomItems', 'roomLogs'].includes(fromView)) {
+        showView('room', false);
+        const char = AppState.characters.find(c => c.id === AppState.activeCharId);
+        if (char) updateRoomVisuals(char);
+        return;
+    }
+    // 診察室設定 から戻る際 ➡ 常に 診察室 へ
+    if (fromView === 'medicalRoomSettings') {
+        showView('medicalRoom', false);
+        if (typeof initMedicalRoom === 'function') initMedicalRoom();
+        return;
+    }
 
     if (state && state.view) {
         // 状態の復元
@@ -1071,7 +1108,8 @@ function setupEventListeners() {
         }
     };
     document.getElementById('btn-back-from-room').onclick = () => {
-        history.back();
+        showView('thread', false);
+        renderThreads();
     };
     document.getElementById('btn-room-send').onclick = handleRoomReply;
     document.getElementById('room-reply-input').addEventListener('keydown', (e) => {
@@ -1087,13 +1125,16 @@ function setupEventListeners() {
     document.getElementById('btn-room-logs').onclick = () => { renderRoomLogs(); showView('roomLogs'); };
     document.getElementById('btn-room-settings').onclick = () => { loadRoomSettingsForm(); showView('roomSettings'); };
     // Room Modal close buttons
-    document.getElementById('btn-close-room-diary').onclick = () => history.back();
-    document.getElementById('btn-close-room-schedule').onclick = () => history.back();
-    document.getElementById('btn-close-room-items').onclick = () => history.back();
-    document.getElementById('btn-close-room-logs').onclick = () => history.back();
-    document.getElementById('btn-close-room-settings-modal').onclick = () => history.back();
+    document.getElementById('btn-close-room-diary').onclick = () => showView('room', false);
+    document.getElementById('btn-close-room-schedule').onclick = () => showView('room', false);
+    document.getElementById('btn-close-room-items').onclick = () => showView('room', false);
+    document.getElementById('btn-close-room-logs').onclick = () => showView('room', false);
+    document.getElementById('btn-close-room-settings-modal').onclick = () => showView('room', false);
     // Room Settings save
-    document.getElementById('btn-save-room-settings').onclick = saveRoomSettingsForm;
+    document.getElementById('btn-save-room-settings').onclick = () => {
+        saveRoomSettingsForm();
+        showView('room', false);
+    };
     // Room Gift
     document.getElementById('btn-room-gift').onclick = handleRoomGift;
     // Room Settings Cropper Events (初期化)
@@ -1112,19 +1153,19 @@ function setupEventListeners() {
         loadMedicalRoomSettingsForm();
         showView('medicalRoomSettings');
     };
-    document.getElementById('btn-close-medical-room-settings').onclick = () => history.back();
+    document.getElementById('btn-close-medical-room-settings').onclick = () => showView('medicalRoom', false);
     document.getElementById('btn-save-medical-room-settings').onclick = () => {
-        history.back();
+        showView('medicalRoom', false);
     };
     // モデル設定画面
     document.getElementById('btn-open-model-settings').onclick = () => {
         loadModelSettingsForm();
         showView('modelSettings');
     };
-    document.getElementById('btn-close-model-settings').onclick = () => history.back();
+    document.getElementById('btn-close-model-settings').onclick = () => showView('globalSettings', false);
     document.getElementById('btn-save-model-settings').onclick = () => {
         saveModelSettingsForm();
-        history.back();
+        showView('globalSettings', false);
     };
     // 診察ルームタブ切り替え（上部・下部両方）
     document.querySelectorAll('[data-med-tab]').forEach(btn => {
@@ -1178,9 +1219,11 @@ function setupEventListeners() {
                 AppState.fitbitSecret = document.getElementById('fitbit-secret-input').value.trim();
                 
                 saveData();
-                history.back();
+                showView('main', false);
+                renderCharacters();
             } else if (target.id === 'btn-close-global-settings') {
-                history.back();
+                showView('main', false);
+                renderCharacters();
             }
         };
     }
