@@ -1790,6 +1790,7 @@ function ensureRoomData(char) {
             firstFetchDone: false, // 初回2ヶ月取得済みフラグ
             periodSettings: null,  // { lastPeriodDate, cycleLength }
             karte: '',             // AIが管理するカルテテキスト
+            karteOld: '',          // [追加] 1つ前のカルテテキスト（バックアップ）
             analysisResults: [],   // 分析結果配列 { date, content, modelUsed }
             chatLogs: [],          // 診察チャットログ { role, text, timestamp, source:'medical' }
             lastAnalysisDate: null // 最終分析実行日
@@ -4107,9 +4108,14 @@ async function runAnalysis(char) {
         const karteMatch = analysisText.match(/\[KARTE_UPDATE\]([\s\S]*?)\[\/KARTE_UPDATE\]/);
         if (karteMatch) {
             const newKarte = karteMatch[1].trim();
-            if (newKarte) {
-                char.medicalData.karte += `\n[${new Date().toLocaleDateString('ja-JP')}] ${newKarte}`;
-                medLog('カルテ自動更新');
+            // バリデーション: 極端に短い、または空の場合は更新しない
+            if (newKarte && newKarte.length > 5) {
+                // バックアップを取ってから置換
+                char.medicalData.karteOld = char.medicalData.karte;
+                char.medicalData.karte = newKarte;
+                medLog('カルテ全文更新(分析経由)');
+            } else {
+                medLog('カルテ更新スキップ: 内容が不十分または空です');
             }
             analysisText = analysisText.replace(/\[KARTE_UPDATE\][\s\S]*?\[\/KARTE_UPDATE\]/, '').trim();
         }
@@ -4262,9 +4268,14 @@ async function sendMedChat(char) {
         const karteMatch = aiText.match(/\[KARTE_UPDATE\]([\s\S]*?)\[\/KARTE_UPDATE\]/);
         if (karteMatch) {
             const newKarte = karteMatch[1].trim();
-            if (newKarte) {
-                char.medicalData.karte += `\n[${new Date().toLocaleDateString('ja-JP')}] ${newKarte}`;
-                medLog('カルテ自動更新(相談経由)');
+            // バリデーション: 極端に短い、または空の場合は更新しない
+            if (newKarte && newKarte.length > 5) {
+                // バックアップを取ってから置換
+                char.medicalData.karteOld = char.medicalData.karte;
+                char.medicalData.karte = newKarte;
+                medLog('カルテ全文更新(相談経由)');
+            } else {
+                medLog('カルテ更新スキップ: 内容が不十分または空です');
             }
             aiText = aiText.replace(/\[KARTE_UPDATE\][\s\S]*?\[\/KARTE_UPDATE\]/, '').trim();
         }
@@ -4310,6 +4321,21 @@ function renderKarteView(char, container) {
         emptyDiv.className = 'med-karte-empty';
         emptyDiv.textContent = 'カルテはまだ作成されていません。\n分析や相談を行うと、AIが自動的に記録を残します。';
         container.appendChild(emptyDiv);
+    }
+
+    // 前回のカルテ表示（バックアップ）
+    if (char.medicalData.karteOld) {
+        const oldHeader = document.createElement('h4');
+        oldHeader.style.cssText = 'color:rgba(255,255,255,0.6); font-size:0.85rem; margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;';
+        oldHeader.textContent = '前回の履歴（バックアップ）';
+        container.appendChild(oldHeader);
+
+        const oldDiv = document.createElement('div');
+        oldDiv.className = 'med-karte-content';
+        oldDiv.style.opacity = '0.6';
+        oldDiv.style.fontSize = '0.85rem';
+        oldDiv.textContent = char.medicalData.karteOld;
+        container.appendChild(oldDiv);
     }
 }
 
@@ -4421,7 +4447,12 @@ function buildMedicalSystemPrompt(char, mode) {
     prompt += `\n\n【指示】
 - ユーザの健康に関わる話（腹痛、頭痛など）が出たら、Fitbitデータやカルテ情報から要因分析を行ってください。
 - 要因候補（食べ物、行動、環境など）をヒアリングし、有用な情報はカルテに記録してください。
-- カルテに記録すべき情報がある場合は、回答の最後に [KARTE_UPDATE]記録内容[/KARTE_UPDATE] を付与してください。通常の回答にはこのタグを含めないでください。
+- カルテ（karte）を更新する場合は、既存の内容をすべて把握した上で、新しい情報を統合・集約し、重複のない「最新のカルテ全文」を作成してください。
+- 以下のフォーマットを維持して記録してください：
+　・症状名：YYYY/M/D、YYYY/M/D...
+　　【考えられる要因】YYYY/M/D：要因の詳細、YYYY/M/D:要因の詳細...
+- 記録内容は、あなたのキャラクター（性格・口調）を反映させたものにしてください。
+- カルテに記録すべき情報がある場合は、回答の最後に [KARTE_UPDATE]新しいカルテ全文[/KARTE_UPDATE] を付与してください。通常の回答にはこのタグを含めないでください。
 - 現在日時: ${getDatetimeString() || new Date().toLocaleString('ja-JP')}`;
 
     return prompt;
